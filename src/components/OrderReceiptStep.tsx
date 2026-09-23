@@ -1,16 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import {
   CheckCircle2,
-  Download,
-  Printer,
   Home,
   Coffee,
   Calendar,
   User,
   MapPin,
   Hash,
-  Phone,
-  FileImage
+  Phone
 } from 'lucide-react';
 import { OrderData } from '../types/cafe';
 import { captureReceiptElement, clearCafeStorage } from '../services/cafeService';
@@ -52,10 +49,6 @@ export const OrderReceiptStep: React.FC<OrderReceiptStepProps> = ({
     } finally {
       setIsCapturing(false);
     }
-  };
-
-  const handlePrint = () => {
-    window.print();
   };
 
   const handleHomeClick = () => {
@@ -210,7 +203,7 @@ export const OrderReceiptStep: React.FC<OrderReceiptStepProps> = ({
         </div>
       </div>
 
-      {/* Action Buttons (Strictly adhering to original flow: Home and Download Receipt) */}
+      {/* Action Buttons: Home button */}
       <div className="space-y-3 no-print">
         {/* Home Button */}
         <button
@@ -221,30 +214,15 @@ export const OrderReceiptStep: React.FC<OrderReceiptStepProps> = ({
           <span>🏠 Home</span>
         </button>
 
-        <div className="grid grid-cols-2 gap-3">
-          {/* Download Receipt (Print View) */}
-          <button
-            onClick={handlePrint}
-            className="py-3 px-4 rounded-xl font-semibold text-xs sm:text-sm bg-stone-900 hover:bg-stone-800 text-white shadow-xs transition-colors flex items-center justify-center gap-2 cursor-pointer"
-          >
-            <Printer className="w-4 h-4" />
-            <span>Print Receipt</span>
-          </button>
-
-          {/* Download Receipt PNG (Image Capture) */}
-          <button
-            onClick={() => handleCaptureImage(true)}
-            disabled={isCapturing}
-            className="py-3 px-4 rounded-xl font-semibold text-xs sm:text-sm bg-stone-100 hover:bg-stone-200 text-stone-800 border border-stone-200 shadow-xs transition-colors flex items-center justify-center gap-2 cursor-pointer"
-          >
-            <FileImage className="w-4 h-4 text-teal-700" />
-            <span>{isCapturing ? 'Generating PNG...' : 'Save as PNG'}</span>
-          </button>
-        </div>
+        {isCapturing && (
+          <p className="text-center text-xs text-stone-500 font-medium">
+            Generating receipt image...
+          </p>
+        )}
 
         {downloadSuccess && (
           <p className="text-center text-xs text-emerald-700 font-medium">
-            ✓ Receipt PNG downloaded to your device
+            ✓ Receipt screenshot saved to your device
           </p>
         )}
       </div>

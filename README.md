@@ -32,11 +32,10 @@ The application communicates with automated **n8n workflows** to dynamically pul
    - Prevents double submissions with button locking and visual loading states.
    - Extracts and displays the official generated Order Number.
 
-4. **Digital Receipt & Printable Bill**:
+4. **Digital Receipt & Automatic Screenshot**:
    - Authentic cafe invoice card displaying order number, customer metadata, and an itemized breakdown.
-   - **Auto-Capture & Download PNG**: Automatically renders and downloads the receipt image (`html-to-image`) after placement.
-   - **Print Invoice**: Optimized print stylesheet (`window.print()`) for thermal or standard receipts.
-   - **🏠 Home Reset**: Safely clears session state for the next guest.
+   - **Automatic Screenshot Capture**: Automatically generates and downloads the receipt image (`html-to-image`) immediately upon order completion.
+   - **🏠 Home Reset**: Easily returns to the starting screen to clear session state for the next guest.
 
 5. **Python Backend Architecture**:
    - Fully separated backend located in `/backend/` with Pydantic validation schemas, service layer, and blueprints for both Flask and FastAPI.
@@ -72,7 +71,7 @@ musafir-cafe/
 │   │   ├── OrderTypeSelection.tsx # Step 1: Delivery vs Dine-in selector
 │   │   ├── CustomerFormStep.tsx   # Step 2: Form with live validation
 │   │   ├── MenuStep.tsx           # Step 3: Categorized menu, search & cart
-│   │   └── OrderReceiptStep.tsx   # Step 4: Digital bill, print & PNG export
+│   │   └── OrderReceiptStep.tsx   # Step 4: Digital bill & auto-screenshot capture
 │   ├── services/
 │   │   └── cafeService.ts     # API client, n8n integration & storage helpers
 │   ├── types/
