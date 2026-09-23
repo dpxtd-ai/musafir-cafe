@@ -126,7 +126,8 @@ export async function captureReceiptElement(elementId: string = 'orderReceipt'):
       quality: 0.95,
       pixelRatio: 2,
       backgroundColor: '#ffffff',
-      cacheBust: true
+      cacheBust: true,
+      skipFonts: true
     });
 
     const link = document.createElement('a');
