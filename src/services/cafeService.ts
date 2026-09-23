@@ -1,4 +1,4 @@
-import html2canvas from 'html2canvas';
+import { toPng } from 'html-to-image';
 import { Customer, MenuItem, OrderData } from '../types/cafe';
 
 export const MENU_API = 'https://ydnyan0804.app.n8n.cloud/webhook/menu';
@@ -122,16 +122,16 @@ export async function captureReceiptElement(elementId: string = 'orderReceipt'):
   if (!receipt) return;
 
   try {
-    const canvas = await html2canvas(receipt, {
-      scale: 2,
+    const dataUrl = await toPng(receipt, {
+      quality: 0.95,
+      pixelRatio: 2,
       backgroundColor: '#ffffff',
-      useCORS: true,
-      logging: false
+      cacheBust: true
     });
 
     const link = document.createElement('a');
     link.download = `Musafir_Order_${Date.now()}.png`;
-    link.href = canvas.toDataURL('image/png');
+    link.href = dataUrl;
     link.click();
   } catch (error) {
     console.error('Receipt capture error:', error);

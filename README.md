@@ -34,7 +34,7 @@ The application communicates with automated **n8n workflows** to dynamically pul
 
 4. **Digital Receipt & Printable Bill**:
    - Authentic cafe invoice card displaying order number, customer metadata, and an itemized breakdown.
-   - **Auto-Capture & Download PNG**: Automatically renders and downloads the receipt image (`html2canvas`) after placement.
+   - **Auto-Capture & Download PNG**: Automatically renders and downloads the receipt image (`html-to-image`) after placement.
    - **Print Invoice**: Optimized print stylesheet (`window.print()`) for thermal or standard receipts.
    - **🏠 Home Reset**: Safely clears session state for the next guest.
 
