@@ -27,7 +27,7 @@ export const Header: React.FC<HeaderProps> = ({
               Musafir Cafe
             </span>
             <span className="hidden sm:inline-block ml-2 text-xs text-stone-500 font-medium tracking-wide uppercase">
-              Online Ordering
+              Order at Your Fingertips
             </span>
           </div>
         </button>
