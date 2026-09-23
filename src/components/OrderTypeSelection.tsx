@@ -1,6 +1,7 @@
 import React from 'react';
 import { Home, Utensils, Sparkles, MapPin, Clock, ShieldCheck } from 'lucide-react';
 import { OrderType } from '../types/cafe';
+import heroImage from '../assets/images/musafir_cafe_hero_1790180312054.jpg';
 
 interface OrderTypeSelectionProps {
   onSelect: (type: OrderType) => void;
@@ -13,7 +14,7 @@ export const OrderTypeSelection: React.FC<OrderTypeSelectionProps> = ({ onSelect
       <div className="relative rounded-2xl overflow-hidden shadow-sm border border-stone-200/80 bg-stone-900 text-white">
         <div className="relative h-48 sm:h-56 w-full overflow-hidden">
           <img
-            src="/src/assets/images/musafir_cafe_hero_1790180312054.jpg"
+            src={heroImage}
             alt="Musafir Cafe Ambiance"
             referrerPolicy="no-referrer"
             className="w-full h-full object-cover object-center opacity-85 hover:scale-105 transition-transform duration-700"
