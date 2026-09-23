@@ -1,0 +1,6 @@
+{
+  "name": "Musafir Cafe - Online Ordering",
+  "description": "Artisanal online ordering app for Musafir Cafe supporting Home Delivery and Dine-In orders with real-time menu and instant receipt generation.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
