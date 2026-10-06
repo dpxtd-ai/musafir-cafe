@@ -9,6 +9,7 @@ import { OrderTypeSelection } from './components/OrderTypeSelection';
 import { CustomerFormStep } from './components/CustomerFormStep';
 import { MenuStep } from './components/MenuStep';
 import { OrderReceiptStep } from './components/OrderReceiptStep';
+import { OfflineIndicator } from './components/OfflineIndicator';
 import {
   Customer,
   MenuItem,
@@ -144,6 +145,9 @@ export default function App() {
           </span>
         </div>
       </footer>
+
+      {/* Offline Connectivity Notification */}
+      <OfflineIndicator />
     </div>
   );
-}
+};

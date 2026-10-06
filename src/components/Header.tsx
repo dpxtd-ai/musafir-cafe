@@ -1,6 +1,7 @@
 import React from 'react';
 import { Coffee, UtensilsCrossed } from 'lucide-react';
 import { OrderType } from '../types/cafe';
+import { PWAInstallButton } from './PWAInstallButton';
 
 interface HeaderProps {
   orderType?: OrderType | null;
@@ -13,7 +14,7 @@ export const Header: React.FC<HeaderProps> = ({
 }) => {
   return (
     <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-stone-200/80 transition-all no-print">
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-2">
         {/* Brand Zone */}
         <button
           onClick={onReset}
@@ -32,13 +33,16 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </button>
 
-        {/* Center / Status Zone */}
-        {orderType && (
-          <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-stone-100 text-stone-700 text-xs font-medium border border-stone-200/60">
-            <UtensilsCrossed className="w-3.5 h-3.5 text-teal-700" />
-            <span>Mode: <strong className="text-stone-900">{orderType}</strong></span>
-          </div>
-        )}
+        {/* Right Zone: Mode Badge + PWA Install Button */}
+        <div className="flex items-center gap-2.5">
+          {orderType && (
+            <div className="hidden xs:flex items-center gap-2 px-3 py-1 rounded-full bg-stone-100 text-stone-700 text-xs font-medium border border-stone-200/60">
+              <UtensilsCrossed className="w-3.5 h-3.5 text-teal-700" />
+              <span>Mode: <strong className="text-stone-900">{orderType}</strong></span>
+            </div>
+          )}
+          <PWAInstallButton />
+        </div>
       </div>
     </header>
   );

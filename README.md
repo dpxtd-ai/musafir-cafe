@@ -46,7 +46,13 @@ The application communicates with automated **n8n workflows** to dynamically pul
    - **Automatic Screenshot Capture**: Automatically generates and downloads the receipt image (`html-to-image`) immediately upon order completion.
    - **🏠 Home Reset**: Easily returns to the starting screen to clear session state for the next guest.
 
-6. **Python Backend Architecture**:
+6. **Progressive Web App (PWA) & Offline Reliability**:
+   - **Full PWA Installability**: Installable directly onto mobile home screens (Android & iOS Safari) and desktop browsers (Chrome, Edge) via the in-app **"Install App"** header button.
+   - **Service Worker Precaching**: Powered by `vite-plugin-pwa` with automatic precaching of scripts, styles, Google Fonts, and imagery.
+   - **Compliant Brand Icons**: High-contrast brand icons for 192x192, 512x512, 512x512 maskable (safe-zone padded), and 180x180 iOS touch icon.
+   - **Offline Mode Indicator**: Displays a non-intrusive status toast when network connectivity drops, ensuring continuous access to the cached menu.
+
+7. **Python Backend Architecture**:
    - Fully separated backend located in `/backend/` with Pydantic validation schemas, service layer, and blueprints for both Flask and FastAPI.
 
 ---
