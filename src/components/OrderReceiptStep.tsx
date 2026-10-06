@@ -7,7 +7,11 @@ import {
   User,
   MapPin,
   Hash,
-  Phone
+  Phone,
+  CreditCard,
+  QrCode,
+  Banknote,
+  ShieldCheck
 } from 'lucide-react';
 import { OrderData } from '../types/cafe';
 import { captureReceiptElement, clearCafeStorage } from '../services/cafeService';
@@ -190,6 +194,50 @@ export const OrderReceiptStep: React.FC<OrderReceiptStepProps> = ({
               </tr>
             </tfoot>
           </table>
+        </div>
+
+        {/* Payment Details Section */}
+        <div className="py-3 px-3.5 my-2 rounded-xl bg-stone-50 border border-stone-200/90 text-xs space-y-1.5">
+          <div className="flex items-center justify-between">
+            <span className="text-stone-500 font-medium flex items-center gap-1.5">
+              {orderData.paymentMethod?.includes('Cash') ? (
+                <Banknote className="w-3.5 h-3.5 text-amber-700" />
+              ) : (
+                <QrCode className="w-3.5 h-3.5 text-teal-700" />
+              )}
+              <span>Payment Mode:</span>
+            </span>
+            <span className="font-bold text-stone-900">
+              {orderData.paymentMethod || orderData.payment?.method || 'UPI Barcode'}
+              {orderData.paymentApp && orderData.paymentApp !== 'Cash'
+                ? ` (${orderData.paymentApp})`
+                : ''}
+            </span>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <span className="text-stone-500 font-medium">Payment Status:</span>
+            <span
+              className={`font-semibold px-2 py-0.5 rounded-full text-[11px] ${
+                orderData.paymentStatus === 'Paid' || orderData.payment?.status === 'Paid'
+                  ? 'bg-emerald-100 text-emerald-800'
+                  : 'bg-amber-100 text-amber-800'
+              }`}
+            >
+              {orderData.paymentStatus === 'Paid' || orderData.payment?.status === 'Paid'
+                ? 'Paid Verified ✓'
+                : 'Pending (Cash upon delivery)'}
+            </span>
+          </div>
+
+          {(orderData.transactionId || orderData.payment?.transactionId) && (
+            <div className="flex items-center justify-between pt-1 border-t border-stone-200/70 text-[11px]">
+              <span className="text-stone-400">Ref / UTR ID:</span>
+              <span className="font-mono text-stone-700 font-semibold">
+                {orderData.transactionId || orderData.payment?.transactionId}
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Cafe Footer Note */}

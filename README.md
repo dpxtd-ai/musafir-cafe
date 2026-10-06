@@ -27,17 +27,26 @@ The application communicates with automated **n8n workflows** to dynamically pul
    - Real-time search filter and category jump navigation.
    - Interactive quantity steppers (`+` / `-`) with instant subtotal and grand total recalculation.
 
-3. **Kitchen & CRM Webhook Integration**:
-   - Posts orders directly to `https://ydnyan0804.app.n8n.cloud/webhook/order`.
+3. **Interactive Payment Gateway (UPI Barcode & Cash)**:
+   - **Payment Modal Before Order Placement**: Intercepts the order before pushing to the n8n endpoint.
+   - **Barcode / QR Code Display**: Generates a standard NPCI UPI payment QR code (`upi://pay?pa=musafircafe@upi...`) with order grand total.
+   - **UPI Direct App Intents**: Quick-action links for **Google Pay**, **BHIM**, **PhonePe**, and **Paytm**.
+   - **App Response & Waiting Tracker**: Real-time status pulse and countdown waiting for payment response from the selected UPI app.
+   - **Manual UTR / Transaction ID**: Enables customers to enter their 12-digit UPI Transaction ID or UTR if the payment status is not automatically fetched or if external app redirects don't trigger.
+   - **Cash Option**: Supports Cash on Delivery (for delivery orders) or Pay at Counter (for dine-in orders).
+
+4. **Kitchen & CRM Webhook Integration**:
+   - Posts verified orders directly to `https://ydnyan0804.app.n8n.cloud/webhook/order`.
+   - Sends complete payload including customer information, items, total, payment method, payment status, and transaction ID.
    - Prevents double submissions with button locking and visual loading states.
    - Extracts and displays the official generated Order Number.
 
-4. **Digital Receipt & Automatic Screenshot**:
-   - Authentic cafe invoice card displaying order number, customer metadata, and an itemized breakdown.
+5. **Digital Receipt & Automatic Screenshot**:
+   - Authentic cafe invoice card displaying order number, customer metadata, itemized breakdown, and verified payment method & UTR ID.
    - **Automatic Screenshot Capture**: Automatically generates and downloads the receipt image (`html-to-image`) immediately upon order completion.
    - **🏠 Home Reset**: Easily returns to the starting screen to clear session state for the next guest.
 
-5. **Python Backend Architecture**:
+6. **Python Backend Architecture**:
    - Fully separated backend located in `/backend/` with Pydantic validation schemas, service layer, and blueprints for both Flask and FastAPI.
 
 ---
@@ -71,7 +80,8 @@ musafir-cafe/
 │   │   ├── OrderTypeSelection.tsx # Step 1: Delivery vs Dine-in selector
 │   │   ├── CustomerFormStep.tsx   # Step 2: Form with live validation
 │   │   ├── MenuStep.tsx           # Step 3: Categorized menu, search & cart
-│   │   └── OrderReceiptStep.tsx   # Step 4: Digital bill & auto-screenshot capture
+│   │   ├── PaymentModal.tsx       # Step 4: UPI QR/barcode, GPay/BHIM intents & UTR input
+│   │   └── OrderReceiptStep.tsx   # Step 5: Digital bill & auto-screenshot capture
 │   ├── services/
 │   │   └── cafeService.ts     # API client, n8n integration & storage helpers
 │   ├── types/
@@ -181,7 +191,12 @@ uvicorn backend.fastapi_app:app --host 0.0.0.0 --port 5000 --reload
         "subtotal": 80
       }
     ],
-    "total": 80
+    "total": 80,
+    "paymentMethod": "UPI",
+    "paymentStatus": "Paid",
+    "transactionId": "UPI492019482012",
+    "paymentApp": "Google Pay",
+    "timestamp": "2026-10-06T18:15:00.000Z"
   }
   ```
 - **Response Format**:

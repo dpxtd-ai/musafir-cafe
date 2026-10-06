@@ -8,10 +8,12 @@ import {
   ShoppingBag,
   ArrowLeft,
   Sparkles,
-  Loader2
+  Loader2,
+  CreditCard
 } from 'lucide-react';
-import { Customer, MenuItem, CartItem, OrderData } from '../types/cafe';
+import { Customer, MenuItem, CartItem, OrderData, PaymentDetails } from '../types/cafe';
 import { submitCafeOrder, saveOrder } from '../services/cafeService';
+import { PaymentModal } from './PaymentModal';
 
 interface MenuStepProps {
   customer: Customer;
@@ -34,6 +36,7 @@ export const MenuStep: React.FC<MenuStepProps> = ({
   // Expanded category set
   const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Group items by Category
@@ -131,8 +134,8 @@ export const MenuStep: React.FC<MenuStepProps> = ({
     return filtered;
   }, [categories, searchQuery]);
 
-  // Place Order handler adhering strictly to original flow and requirements
-  const handlePlaceOrder = async () => {
+  // Open payment method modal before pushing to n8n endpoint
+  const handlePlaceOrder = () => {
     setErrorMessage(null);
 
     if (cartItems.length === 0) {
@@ -140,11 +143,21 @@ export const MenuStep: React.FC<MenuStepProps> = ({
       return;
     }
 
+    setIsPaymentModalOpen(true);
+  };
+
+  // Submit order to n8n endpoint after payment method selection & confirmation
+  const handleConfirmPaymentAndSubmit = async (paymentDetails: PaymentDetails) => {
     const orderPayload: OrderData = {
       customer,
       items: cartItems,
       total,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      payment: paymentDetails,
+      paymentMethod: paymentDetails.method,
+      paymentStatus: paymentDetails.status,
+      transactionId: paymentDetails.transactionId,
+      paymentApp: paymentDetails.paymentApp
     };
 
     setIsSubmitting(true);
@@ -152,6 +165,7 @@ export const MenuStep: React.FC<MenuStepProps> = ({
     try {
       const orderNumber = await submitCafeOrder(orderPayload);
       saveOrder({ ...orderPayload, orderNumber });
+      setIsPaymentModalOpen(false);
       onOrderSuccess(orderPayload, orderNumber);
     } catch (error) {
       console.error('Order submission failed:', error);
@@ -413,17 +427,28 @@ export const MenuStep: React.FC<MenuStepProps> = ({
             {isSubmitting ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin" />
-                <span>Placing Order...</span>
+                <span>Processing...</span>
               </>
             ) : (
               <>
-                <Sparkles className="w-4 h-4 text-amber-300" />
-                <span>Place Order</span>
+                <CreditCard className="w-4 h-4 text-amber-300" />
+                <span>Proceed to Pay</span>
               </>
             )}
           </button>
         </div>
       </div>
+
+      {/* Payment Method Modal before pushing to n8n endpoint */}
+      <PaymentModal
+        isOpen={isPaymentModalOpen}
+        onClose={() => setIsPaymentModalOpen(false)}
+        total={total}
+        customer={customer}
+        cartItems={cartItems}
+        isSubmitting={isSubmitting}
+        onConfirmOrder={handleConfirmPaymentAndSubmit}
+      />
     </div>
   );
 };

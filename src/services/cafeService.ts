@@ -48,16 +48,23 @@ export async function fetchCafeMenu(): Promise<MenuItem[]> {
 }
 
 export async function submitCafeOrder(orderData: OrderData): Promise<string> {
+  const payload = {
+    customer: orderData.customer,
+    items: orderData.items,
+    total: orderData.total,
+    paymentMethod: orderData.paymentMethod || orderData.payment?.method || 'UPI',
+    paymentStatus: orderData.paymentStatus || orderData.payment?.status || 'Paid',
+    transactionId: orderData.transactionId || orderData.payment?.transactionId || '',
+    paymentApp: orderData.paymentApp || orderData.payment?.paymentApp || 'UPI QR',
+    timestamp: orderData.timestamp || new Date().toISOString()
+  };
+
   const response = await fetch(ORDER_API, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json'
     },
-    body: JSON.stringify({
-      customer: orderData.customer,
-      items: orderData.items,
-      total: orderData.total
-    })
+    body: JSON.stringify(payload)
   });
 
   if (!response.ok) {

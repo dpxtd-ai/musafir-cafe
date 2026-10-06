@@ -41,6 +41,11 @@ class OrderRequest(BaseModel):
     customer: Customer
     items: List[OrderItem] = Field(..., min_length=1, description="At least one item must be ordered")
     total: float = Field(..., ge=0, description="Grand total amount in ₹")
+    paymentMethod: Optional[str] = Field("UPI", description="Payment method used")
+    paymentStatus: Optional[str] = Field("Paid", description="Payment status")
+    transactionId: Optional[str] = Field(None, description="UPI / Payment Transaction ID")
+    paymentApp: Optional[str] = Field(None, description="UPI App used")
+    timestamp: Optional[str] = None
 
 class OrderResponse(BaseModel):
     success: bool
