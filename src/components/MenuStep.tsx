@@ -432,7 +432,7 @@ export const MenuStep: React.FC<MenuStepProps> = ({
             ) : (
               <>
                 <CreditCard className="w-4 h-4 text-amber-300" />
-                <span>Proceed to Pay</span>
+                <span>Pay Now · ₹{total}</span>
               </>
             )}
           </button>

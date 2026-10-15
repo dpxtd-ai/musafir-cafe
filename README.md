@@ -27,10 +27,10 @@ The application communicates with automated **n8n workflows** to dynamically pul
    - Real-time search filter and category jump navigation.
    - Interactive quantity steppers (`+` / `-`) with instant subtotal and grand total recalculation.
 
-3. **Interactive Payment Gateway (UPI Barcode & Cash)**:
+3. **Interactive Payment Gateway (UPI Direct Apps, Barcode & Cash)**:
    - **Payment Modal Before Order Placement**: Intercepts the order before pushing to the n8n endpoint.
-   - **Barcode / QR Code Display**: Generates a standard NPCI UPI payment QR code (`upi://pay?pa=musafircafe@upi...`) with order grand total.
-   - **UPI Direct App Intents**: Quick-action links for **Google Pay**, **BHIM**, **PhonePe**, and **Paytm**.
+   - **UPI Direct App Launchers**: Direct 1-tap launchers for **Google Pay**, **PhonePe**, **BHIM**, and **Paytm** with amount auto-filled to `8185810817@upi`.
+   - **Barcode / QR Code Display**: Generates a standard NPCI UPI payment QR code (`upi://pay?pa=8185810817@upi...`) with order grand total.
    - **App Response & Waiting Tracker**: Real-time status pulse and countdown waiting for payment response from the selected UPI app.
    - **Manual UTR / Transaction ID**: Enables customers to enter their 12-digit UPI Transaction ID or UTR if the payment status is not automatically fetched or if external app redirects don't trigger.
    - **Cash Option**: Supports Cash on Delivery (for delivery orders) or Pay at Counter (for dine-in orders).

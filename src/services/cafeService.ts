@@ -1,8 +1,9 @@
 import { toPng } from 'html-to-image';
 import { Customer, MenuItem, OrderData } from '../types/cafe';
 
-export const MENU_API = 'https://ydnyan0804.app.n8n.cloud/webhook/menu';
-export const ORDER_API = 'https://ydnyan0804.app.n8n.cloud/webhook/order';
+export const MENU_API = '/api/webhook/menu';
+export const ORDER_API = '/api/webhook/order';
+export const REMOTE_ORDER_API = 'https://ydnyan0804.app.n8n.cloud/webhook/order';
 
 // Curated default menu from Musafir Cafe to ensure seamless experience
 export const FALLBACK_MENU: MenuItem[] = [
