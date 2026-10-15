@@ -30,6 +30,11 @@ The application communicates with automated **n8n workflows** to dynamically pul
 3. **Interactive Payment Gateway (UPI Direct Apps, Barcode & Cash)**:
    - **Payment Modal Before Order Placement**: Intercepts the order before pushing to the n8n endpoint.
    - **UPI Direct App Launchers**: Direct 1-tap launchers for **Google Pay**, **PhonePe**, **BHIM**, and **Paytm** with amount auto-filled to `8185810817@upi`.
+   - **Bypass for "Limit Exceeded" / ₹2,000 Web Link Bank Restriction**:
+     - *Direct Mobile Number Transfer*: 1-click copy for **8185810817** to pay directly via contact transfer in Google Pay / PhonePe (bypasses browser link limits up to ₹1,00,000).
+     - *In-App Camera QR Scan*: Scanning the on-screen QR with Google Pay or PhonePe's in-app camera scanner categorizes the payment as an in-person transaction with full daily limits.
+     - *Multi-Handle Switching*: Instant toggle between `@upi`, `@okaxis`, `@ybl`, and `@paytm` if one bank's daily limit is full.
+     - *1-Tap Pay at Counter / Cash*: Allows instantaneous order placement with cash or counter payment so guests are never blocked.
    - **Barcode / QR Code Display**: Generates a standard NPCI UPI payment QR code (`upi://pay?pa=8185810817@upi...`) with order grand total.
    - **App Response & Waiting Tracker**: Real-time status pulse and countdown waiting for payment response from the selected UPI app.
    - **Manual UTR / Transaction ID**: Enables customers to enter their 12-digit UPI Transaction ID or UTR if the payment status is not automatically fetched or if external app redirects don't trigger.

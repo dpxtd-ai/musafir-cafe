@@ -13,7 +13,14 @@ import {
   ExternalLink,
   Loader2,
   Sparkles,
-  ArrowRight
+  ArrowRight,
+  Phone,
+  HelpCircle,
+  ChevronDown,
+  ChevronUp,
+  RefreshCw,
+  Zap,
+  Info
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { Customer, CartItem, PaymentDetails, PaymentMethod } from '../types/cafe';
@@ -55,31 +62,45 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
   const [selectedAppId, setSelectedAppId] = useState<string>('gpay');
   const [transactionId, setTransactionId] = useState<string>('');
   const [copiedUpi, setCopiedUpi] = useState<boolean>(false);
+  const [copiedPhone, setCopiedPhone] = useState<boolean>(false);
   const [waitTimer, setWaitTimer] = useState<number>(60);
   const [isWaitingResponse, setIsWaitingResponse] = useState<boolean>(false);
   const [paymentConfirmed, setPaymentConfirmed] = useState<boolean>(true);
   const [errorNotice, setErrorNotice] = useState<string | null>(null);
   const [showQrScan, setShowQrScan] = useState<boolean>(true);
+  const [showLimitGuide, setShowLimitGuide] = useState<boolean>(total >= 2000);
 
-  // Exact UPI ID specified by user
-  const CAFE_UPI_ID = '8185810817@upi';
+  // Exact mobile number and primary UPI ID specified by user
+  const CAFE_PHONE = '8185810817';
   const CAFE_MERCHANT_NAME = 'Musafir Cafe';
 
-  // Standard universal UPI URI according to NPCI specs with amount pre-filled
-  const universalUpiUri = `upi://pay?pa=${encodeURIComponent(CAFE_UPI_ID)}&pn=${encodeURIComponent(
-    CAFE_MERCHANT_NAME
-  )}&am=${total}&cu=INR&tn=${encodeURIComponent(`Musafir Order ${customer.name}`)}`;
+  // Alternative UPI handles linked to the phone number in case bank daily limit is hit
+  const upiHandles = [
+    { id: 'upi', label: 'BHIM / NPCI', vpa: '8185810817@upi' },
+    { id: 'okaxis', label: 'Google Pay', vpa: '8185810817@okaxis' },
+    { id: 'ybl', label: 'PhonePe', vpa: '8185810817@ybl' },
+    { id: 'paytm', label: 'Paytm', vpa: '8185810817@paytm' }
+  ];
 
-  // Direct app intent links with amount auto-filled and payee set to 8185810817@upi
+  const [activeUpiId, setActiveUpiId] = useState<string>('8185810817@upi');
+
+  // Standard universal UPI URI according to NPCI specs with amount pre-filled
+  // IMPORTANT: Do NOT URL-encode activeUpiId (pa=)! If encoded, '@' becomes '%40' which causes BHIM,
+  // Google Pay, PhonePe, and Paytm to reject the UPI ID as invalid (e.g. 8185810817%40upi).
+  const sanitizedUpiId = activeUpiId.trim();
+  const encodedMerchantName = encodeURIComponent(CAFE_MERCHANT_NAME);
+  const encodedNote = encodeURIComponent(`Order for ${customer.name || 'Guest'}`);
+
+  const universalUpiUri = `upi://pay?pa=${sanitizedUpiId}&pn=${encodedMerchantName}&am=${total}&cu=INR&tn=${encodedNote}`;
+
+  // Direct app intent links with amount auto-filled and payee set to active UPI ID
   const upiApps: UpiAppOption[] = [
     {
       id: 'gpay',
       name: 'Google Pay',
       shortName: 'GPay',
       badge: 'Fast',
-      primaryUri: `tez://upi/pay?pa=${encodeURIComponent(CAFE_UPI_ID)}&pn=${encodeURIComponent(
-        CAFE_MERCHANT_NAME
-      )}&am=${total}&cu=INR&tn=${encodeURIComponent(`Musafir Order ${customer.name}`)}`,
+      primaryUri: `tez://upi/pay?pa=${sanitizedUpiId}&pn=${encodedMerchantName}&am=${total}&cu=INR&tn=${encodedNote}`,
       universalUri: universalUpiUri,
       accentColor: 'emerald',
       bgSelected: 'bg-emerald-50/80',
@@ -92,9 +113,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
       name: 'PhonePe',
       shortName: 'PhonePe',
       badge: 'Popular',
-      primaryUri: `phonepe://pay?pa=${encodeURIComponent(CAFE_UPI_ID)}&pn=${encodeURIComponent(
-        CAFE_MERCHANT_NAME
-      )}&am=${total}&cu=INR&tn=${encodeURIComponent(`Musafir Order ${customer.name}`)}`,
+      primaryUri: `phonepe://pay?pa=${sanitizedUpiId}&pn=${encodedMerchantName}&am=${total}&cu=INR&tn=${encodedNote}`,
       universalUri: universalUpiUri,
       accentColor: 'indigo',
       bgSelected: 'bg-indigo-50/80',
@@ -120,9 +139,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
       name: 'Paytm UPI',
       shortName: 'Paytm',
       badge: 'UPI',
-      primaryUri: `paytmmp://pay?pa=${encodeURIComponent(CAFE_UPI_ID)}&pn=${encodeURIComponent(
-        CAFE_MERCHANT_NAME
-      )}&am=${total}&cu=INR&tn=${encodeURIComponent(`Musafir Order ${customer.name}`)}`,
+      primaryUri: `paytmmp://pay?pa=${sanitizedUpiId}&pn=${encodedMerchantName}&am=${total}&cu=INR&tn=${encodedNote}`,
       universalUri: universalUpiUri,
       accentColor: 'sky',
       bgSelected: 'bg-sky-50/80',
@@ -154,9 +171,15 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
   if (!isOpen) return null;
 
   const handleCopyUpi = () => {
-    navigator.clipboard.writeText(CAFE_UPI_ID);
+    navigator.clipboard.writeText(activeUpiId);
     setCopiedUpi(true);
     setTimeout(() => setCopiedUpi(false), 2500);
+  };
+
+  const handleCopyPhone = () => {
+    navigator.clipboard.writeText(CAFE_PHONE);
+    setCopiedPhone(true);
+    setTimeout(() => setCopiedPhone(false), 2500);
   };
 
   // User selects an app: immediately launch the app with amount pre-filled
@@ -172,6 +195,18 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
     } catch (e) {
       console.warn('Unable to directly trigger app intent via location.href:', e);
     }
+  };
+
+  const handleSwitchToCashAndSubmit = () => {
+    const cashMethod =
+      customer.orderType === 'Home Delivery' ? 'Cash on Delivery' : 'Pay at Counter';
+    onConfirmOrder({
+      method: cashMethod,
+      status: 'Pending',
+      transactionId: `CASH-${Date.now().toString().slice(-6)}`,
+      paymentApp: 'Cash',
+      paidAt: new Date().toISOString()
+    });
   };
 
   const handleGenerateSampleTxn = () => {
@@ -258,6 +293,25 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
             </div>
           </div>
 
+          {/* Proactive Alert for High Amounts (₹2,000+) or Web Limit Advisory */}
+          {total >= 2000 && method === 'UPI' && (
+            <div className="bg-amber-50 border border-amber-300/80 rounded-2xl p-3.5 text-amber-950 text-xs shadow-2xs space-y-2">
+              <div className="flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <p className="font-bold text-amber-900">
+                    Important: Order is ₹{total} (₹2,000+ Limit Advisory)
+                  </p>
+                  <p className="text-[11px] text-amber-800 mt-0.5 leading-relaxed">
+                    Indian banks & UPI apps restrict browser-opened links to ₹2,000. If your app shows{' '}
+                    <strong>"Limit completed for today"</strong> or <strong>"2000 not possible"</strong>,
+                    use the solutions below (Scan QR or Pay to Mobile Number) which have no ₹2,000 limit!
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Payment Method Selector Tabs */}
           <div>
             <label className="block text-xs font-semibold text-stone-700 mb-2">
@@ -340,7 +394,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                     </span>
                   </label>
                   <span className="text-[10px] font-mono text-stone-500">
-                    UPI: <strong>{CAFE_UPI_ID}</strong>
+                    UPI: <strong>{activeUpiId}</strong>
                   </span>
                 </div>
 
@@ -410,6 +464,167 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                 </div>
               </div>
 
+              {/* Instant Helper / Limit Issue Fix Card */}
+              <div className="bg-amber-50/70 border border-amber-200/90 rounded-2xl p-3.5 shadow-2xs">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-amber-950 font-bold text-xs">
+                    <Zap className="w-4 h-4 text-amber-600" />
+                    <span>Getting "Limit Exceeded" or "₹2000 Not Possible" Error?</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowLimitGuide(!showLimitGuide)}
+                    className="text-[11px] font-semibold text-amber-800 hover:text-amber-950 flex items-center gap-0.5 cursor-pointer"
+                  >
+                    <span>{showLimitGuide ? 'Hide Solutions' : 'View 3 Fixes'}</span>
+                    {showLimitGuide ? (
+                      <ChevronUp className="w-3.5 h-3.5" />
+                    ) : (
+                      <ChevronDown className="w-3.5 h-3.5" />
+                    )}
+                  </button>
+                </div>
+
+                {showLimitGuide && (
+                  <div className="mt-3 pt-3 border-t border-amber-200/70 space-y-3 text-xs text-amber-950">
+                    <p className="text-[11px] text-amber-900 leading-relaxed">
+                      💡 <strong>Why this happens:</strong> Under NPCI security guidelines, banks
+                      restrict <em>browser web links</em> to personal UPI IDs to ₹2,000 per
+                      transaction or enforce strict daily web limits. Choose any solution below to
+                      complete your payment instantly without limits:
+                    </p>
+
+                    {/* Fix 1: Pay to Mobile Number */}
+                    <div className="bg-white p-3 rounded-xl border border-amber-200/90 shadow-2xs space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-stone-900 text-xs flex items-center gap-1.5">
+                          <Phone className="w-3.5 h-3.5 text-teal-700" />
+                          <span>Fix 1: Pay Directly to Mobile Number</span>
+                        </span>
+                        <span className="text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full font-bold">
+                          NO ₹2000 LIMIT
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-stone-600 leading-relaxed">
+                        Open Google Pay, PhonePe, or BHIM → Tap <strong>"Pay Phone Number"</strong>{' '}
+                        or search <strong>{CAFE_PHONE}</strong> → Pay <strong>₹{total}</strong>.
+                        Direct contact transfers are not blocked by the ₹2,000 web limit!
+                      </p>
+                      <div className="flex items-center gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={handleCopyPhone}
+                          className="px-3 py-1.5 rounded-lg bg-teal-800 hover:bg-teal-900 text-white font-semibold text-xs flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                        >
+                          {copiedPhone ? (
+                            <>
+                              <Check className="w-3.5 h-3.5 text-amber-300" />
+                              <span>Copied {CAFE_PHONE}!</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="w-3.5 h-3.5 text-amber-300" />
+                              <span>Copy Mobile: {CAFE_PHONE}</span>
+                            </>
+                          )}
+                        </button>
+                        <span className="text-[11px] text-stone-500 font-mono">
+                          (Name: Musafir Cafe)
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Fix 2: Scan QR Code with In-App Scanner */}
+                    <div className="bg-white p-3 rounded-xl border border-amber-200/90 shadow-2xs space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-stone-900 text-xs flex items-center gap-1.5">
+                          <QrCode className="w-3.5 h-3.5 text-teal-700" />
+                          <span>Fix 2: Scan Barcode / QR with In-App Scanner</span>
+                        </span>
+                        <span className="text-[10px] bg-teal-100 text-teal-800 px-2 py-0.5 rounded-full font-bold">
+                          BYPASSES WEB LIMIT
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-stone-600 leading-relaxed">
+                        Open Google Pay or PhonePe on another device, or tap the{' '}
+                        <strong>Scan QR (📷)</strong> icon inside your app to scan the QR code below.
+                        In-app camera QR scans are categorized as in-person payments with full daily limits
+                        up to ₹1,00,000.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowQrScan(true);
+                          const el = document.getElementById('qrCodeSection');
+                          if (el) el.scrollIntoView({ behavior: 'smooth' });
+                        }}
+                        className="text-[11px] text-teal-800 hover:underline font-bold flex items-center gap-1 cursor-pointer"
+                      >
+                        <span>Jump to QR Code Below ↓</span>
+                      </button>
+                    </div>
+
+                    {/* Fix 3: Switch UPI Bank Handle */}
+                    <div className="bg-white p-3 rounded-xl border border-amber-200/90 shadow-2xs space-y-2">
+                      <span className="font-bold text-stone-900 text-xs flex items-center gap-1.5">
+                        <RefreshCw className="w-3.5 h-3.5 text-teal-700" />
+                        <span>Fix 3: Try Alternate UPI Handle</span>
+                      </span>
+                      <p className="text-[11px] text-stone-600 leading-relaxed">
+                        If one bank's daily limit is full, switch to another handle for the same mobile:
+                      </p>
+                      <div className="grid grid-cols-2 gap-1.5 pt-0.5">
+                        {upiHandles.map((h) => {
+                          const isHActive = activeUpiId === h.vpa;
+                          return (
+                            <button
+                              key={h.id}
+                              type="button"
+                              onClick={() => {
+                                setActiveUpiId(h.vpa);
+                                setErrorNotice(null);
+                              }}
+                              className={`p-1.5 rounded-lg border text-left text-[11px] transition-all cursor-pointer ${
+                                isHActive
+                                  ? 'border-teal-700 bg-teal-50 font-bold text-teal-950 ring-1 ring-teal-700/30'
+                                  : 'border-stone-200 hover:bg-stone-50 text-stone-700'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between">
+                                <span>{h.label}</span>
+                                {isHActive && <Check className="w-3 h-3 text-teal-700" />}
+                              </div>
+                              <span className="font-mono text-[10px] text-stone-500 block truncate">
+                                {h.vpa}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Fix 4: Instant One-Click Switch to Pay at Counter */}
+                    <div className="bg-stone-50 p-3 rounded-xl border border-stone-200 flex flex-col sm:flex-row items-center justify-between gap-2.5">
+                      <div className="text-[11px] text-stone-700 text-left">
+                        <span className="font-bold block text-stone-900">
+                          Bank limit totally full for today?
+                        </span>
+                        <span>Pay cash at counter or pay upon delivery instead.</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleSwitchToCashAndSubmit}
+                        disabled={isSubmitting}
+                        className="w-full sm:w-auto px-3.5 py-2 rounded-xl bg-stone-800 hover:bg-stone-900 text-white font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer shrink-0 transition-colors shadow-2xs"
+                      >
+                        <Banknote className="w-3.5 h-3.5 text-amber-300" />
+                        <span>Place Order with Cash</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {/* Waiting Status / Live Guidance Banner */}
               {isWaitingResponse ? (
                 <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200/90 flex items-start gap-3 text-amber-900 animate-pulse">
@@ -419,8 +634,9 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                       Payment initiated in {currentApp.name}... ({waitTimer}s)
                     </p>
                     <p className="text-[11px] text-amber-800/90 mt-0.5 leading-relaxed">
-                      Amount <strong>₹{total}</strong> to <strong>{CAFE_UPI_ID}</strong> is pre-filled.
-                      Enter your UPI PIN in the app, then return here to confirm.
+                      Amount <strong>₹{total}</strong> to <strong>{activeUpiId}</strong> is pre-filled.
+                      If app shows limit error, copy phone number <strong>{CAFE_PHONE}</strong> to
+                      pay directly.
                     </p>
                   </div>
                 </div>
@@ -429,7 +645,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                   <div className="flex items-center gap-2">
                     <ShieldCheck className="w-4 h-4 text-teal-700 shrink-0" />
                     <span>
-                      Payee: <strong>8185810817@upi</strong> (Musafir Cafe)
+                      Payee: <strong>{activeUpiId}</strong> (Musafir Cafe)
                     </span>
                   </div>
                   <span className="text-[11px] font-bold text-teal-800 bg-white px-2 py-0.5 rounded-md border border-teal-200">
@@ -439,7 +655,10 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
               )}
 
               {/* Barcode / QR Code View */}
-              <div className="bg-stone-50 rounded-2xl p-4 border border-stone-200/90 text-center flex flex-col items-center">
+              <div
+                id="qrCodeSection"
+                className="bg-stone-50 rounded-2xl p-4 border border-stone-200/90 text-center flex flex-col items-center"
+              >
                 <div className="flex items-center justify-between w-full mb-2">
                   <span className="text-xs font-bold text-stone-800 flex items-center gap-1.5">
                     <QrCode className="w-3.5 h-3.5 text-teal-800" />
@@ -448,7 +667,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                   <button
                     type="button"
                     onClick={() => setShowQrScan(!showQrScan)}
-                    className="text-[11px] text-teal-800 font-semibold hover:underline"
+                    className="text-[11px] text-teal-800 font-semibold hover:underline cursor-pointer"
                   >
                     {showQrScan ? 'Hide QR' : 'Show QR'}
                   </button>
@@ -456,41 +675,71 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
 
                 {showQrScan && (
                   <>
-                    <div className="bg-white p-3 rounded-2xl shadow-xs border border-stone-200/70 inline-block my-2">
+                    <div className="bg-white p-3.5 rounded-2xl shadow-xs border border-stone-200/70 inline-block my-2">
                       <QRCodeSVG
                         value={universalUpiUri}
-                        size={160}
+                        size={170}
                         level="M"
                         includeMargin={false}
                         className="mx-auto"
                       />
                     </div>
 
+                    <div className="bg-teal-50 border border-teal-200/80 px-3 py-1.5 rounded-xl text-teal-950 text-[11px] font-medium my-1 max-w-sm">
+                      ✨ In-app camera scanner bypasses the ₹2,000 web link limit
+                    </div>
+
                     <p className="text-[11px] text-stone-500 mt-1">
-                      Scan with Google Pay, PhonePe, BHIM, Paytm or banking app
+                      Scan with Google Pay, PhonePe, BHIM, Paytm or any banking app
                     </p>
 
-                    {/* Cafe UPI ID with Copy Button */}
-                    <div className="mt-3 inline-flex items-center gap-2 bg-white px-3 py-1.5 rounded-xl border border-stone-200/80 shadow-2xs">
-                      <span className="text-[11px] text-stone-500">UPI ID:</span>
-                      <span className="font-mono font-bold text-stone-900 text-xs">
-                        {CAFE_UPI_ID}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={handleCopyUpi}
-                        className="p-1 text-stone-500 hover:text-teal-900 hover:bg-stone-100 rounded-md transition-colors cursor-pointer"
-                        title="Copy UPI ID"
-                      >
-                        {copiedUpi ? (
-                          <Check className="w-3.5 h-3.5 text-emerald-600" />
-                        ) : (
-                          <Copy className="w-3.5 h-3.5" />
+                    {/* Cafe UPI ID & Mobile Number with Copy Buttons */}
+                    <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+                      {/* Copy UPI ID */}
+                      <div className="inline-flex items-center gap-2 bg-white px-3 py-1.5 rounded-xl border border-stone-200/80 shadow-2xs">
+                        <span className="text-[11px] text-stone-500">UPI ID:</span>
+                        <span className="font-mono font-bold text-stone-900 text-xs">
+                          {activeUpiId}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={handleCopyUpi}
+                          className="p-1 text-stone-500 hover:text-teal-900 hover:bg-stone-100 rounded-md transition-colors cursor-pointer"
+                          title="Copy UPI ID"
+                        >
+                          {copiedUpi ? (
+                            <Check className="w-3.5 h-3.5 text-emerald-600" />
+                          ) : (
+                            <Copy className="w-3.5 h-3.5" />
+                          )}
+                        </button>
+                        {copiedUpi && (
+                          <span className="text-[10px] text-emerald-600 font-semibold">Copied!</span>
                         )}
-                      </button>
-                      {copiedUpi && (
-                        <span className="text-[10px] text-emerald-600 font-semibold">Copied!</span>
-                      )}
+                      </div>
+
+                      {/* Copy Mobile Number */}
+                      <div className="inline-flex items-center gap-2 bg-white px-3 py-1.5 rounded-xl border border-stone-200/80 shadow-2xs">
+                        <span className="text-[11px] text-stone-500">Mobile:</span>
+                        <span className="font-mono font-bold text-stone-900 text-xs">
+                          {CAFE_PHONE}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={handleCopyPhone}
+                          className="p-1 text-stone-500 hover:text-teal-900 hover:bg-stone-100 rounded-md transition-colors cursor-pointer"
+                          title="Copy Phone Number"
+                        >
+                          {copiedPhone ? (
+                            <Check className="w-3.5 h-3.5 text-emerald-600" />
+                          ) : (
+                            <Copy className="w-3.5 h-3.5" />
+                          )}
+                        </button>
+                        {copiedPhone && (
+                          <span className="text-[10px] text-emerald-600 font-semibold">Copied!</span>
+                        )}
+                      </div>
                     </div>
                   </>
                 )}
@@ -529,8 +778,9 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                 </div>
 
                 <p className="text-[11px] text-stone-500 leading-relaxed">
-                  💡 <strong>Tip:</strong> If your payment completed in Google Pay, BHIM, or PhonePe
-                  and you need to submit the receipt with UTR, paste the 12-digit UTR number here.
+                  💡 <strong>Tip:</strong> If you paid via Google Pay, BHIM, or PhonePe (either through
+                  the app, QR scanner, or direct mobile transfer to <strong>{CAFE_PHONE}</strong>),
+                  paste the 12-digit UTR number here and confirm your order.
                 </p>
               </div>
 
@@ -544,7 +794,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                 />
                 <span className="text-[11px] text-stone-700 leading-tight">
                   I have transferred / authorized the payment of <strong>₹{total}</strong> to{' '}
-                  <strong>8185810817@upi</strong> via {currentApp.name}.
+                  <strong>{activeUpiId}</strong> (or mobile <strong>{CAFE_PHONE}</strong>) via {currentApp.name}.
                 </span>
               </label>
             </div>
@@ -569,7 +819,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
               <div className="pt-2 border-t border-amber-200/60 flex items-center justify-between text-xs text-amber-800 font-medium">
                 <span>Payment Status upon confirmation:</span>
                 <span className="bg-amber-100 text-amber-900 px-2 py-0.5 rounded-full font-bold text-[11px]">
-                  Pending (Pay on Delivery)
+                  Pending (Pay on Delivery / Counter)
                 </span>
               </div>
             </div>
