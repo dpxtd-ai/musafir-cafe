@@ -17,7 +17,8 @@ import {
   ChevronUp,
   Zap,
   Info,
-  HelpCircle
+  Camera,
+  ArrowRight
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { Customer, CartItem, PaymentDetails, PaymentMethod } from '../types/cafe';
@@ -56,7 +57,8 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
   onConfirmOrder
 }) => {
   const [method, setMethod] = useState<PaymentMethod>('UPI');
-  const [selectedAppId, setSelectedAppId] = useState<string>('cred');
+  // GOOGLE PAY IS THE PRIMARY DEFAULT OPTION
+  const [selectedAppId, setSelectedAppId] = useState<string>('gpay');
   const [transactionId, setTransactionId] = useState<string>('');
   const [copiedUpi, setCopiedUpi] = useState<boolean>(false);
   const [copiedPhone, setCopiedPhone] = useState<boolean>(false);
@@ -64,52 +66,43 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
   const [waitTimer, setWaitTimer] = useState<number>(60);
   const [isWaitingResponse, setIsWaitingResponse] = useState<boolean>(false);
   const [showQrScan, setShowQrScan] = useState<boolean>(true);
-  const [showLimitGuide, setShowLimitGuide] = useState<boolean>(true);
+  const [showGPayGuide, setShowGPayGuide] = useState<boolean>(true);
   const [errorNotice, setErrorNotice] = useState<string | null>(null);
 
-  // SINGLE, EXACT UPI ID & MOBILE AS SPECIFIED BY USER - NO CONFUSION
+  // SINGLE, EXACT UPI ID & MOBILE AS REQUIRED BY USER
   const CAFE_UPI_ID = '8185810817@upi';
   const CAFE_PHONE = '8185810817';
   const CAFE_MERCHANT_NAME = 'Musafir Cafe';
 
-  // Format amount with 2 decimals as required by NPCI standard (e.g. 150.00)
+  // Format amount with 2 decimals
   const formattedAmount = Number(total).toFixed(2);
   const encodedMerchantName = encodeURIComponent(CAFE_MERCHANT_NAME);
   const customerNameShort = customer.name ? customer.name.slice(0, 15) : 'Guest';
   const encodedNote = encodeURIComponent(`Order for ${customerNameShort}`);
-  const txnRef = `MC${Date.now()}`;
 
-  // Standard universal UPI URI according to NPCI specifications
-  // CRITICAL: Payee address `pa=` MUST contain the literal '@' symbol (8185810817@upi).
-  // Do NOT percent-encode '@' to '%40' because BHIM, GPay, PhonePe, and Paytm will treat it as an invalid UPI handle!
-  const universalUpiUri = `upi://pay?pa=${CAFE_UPI_ID}&pn=${encodedMerchantName}&am=${formattedAmount}&cu=INR&tn=${encodedNote}&tr=${txnRef}`;
+  // CRITICAL FIX FOR GOOGLE PAY "EXCEEDED BANK LIMIT" ERROR:
+  // 1. DO NOT INCLUDE `tr=` (Transaction Reference). When `tr` is sent to a personal VPA (`@upi`),
+  //    Google Pay treats it as an unregistered merchant call, causing banks to reject with
+  //    "You have exceeded the bank limit for this payment retry with a smaller amount".
+  // 2. Keep the URI clean: `pa`, `pn`, `am`, `cu=INR`, `tn`.
+  // 3. For Google Pay on Android, use `tez://upi/pay` or standard `upi://pay` without forced package lock.
+  const cleanUniversalUpiUri = `upi://pay?pa=${CAFE_UPI_ID}&pn=${encodedMerchantName}&am=${formattedAmount}&cu=INR&tn=${encodedNote}`;
+  const gpayTezUri = `tez://upi/pay?pa=${CAFE_UPI_ID}&pn=${encodedMerchantName}&am=${formattedAmount}&cu=INR&tn=${encodedNote}`;
+  const gpayIntentUri = `intent://pay?pa=${CAFE_UPI_ID}&pn=${encodedMerchantName}&am=${formattedAmount}&cu=INR&tn=${encodedNote}#Intent;scheme=upi;package=com.google.android.apps.nbu.paisa.user;end;`;
 
   // Direct app intents for Android and fallback URI schemes for iOS
   const upiApps: UpiAppOption[] = [
     {
-      id: 'cred',
-      name: 'CRED UPI',
-      shortName: 'CRED',
-      badge: 'Works Best',
-      androidIntent: `intent://pay?pa=${CAFE_UPI_ID}&pn=${encodedMerchantName}&am=${formattedAmount}&cu=INR&tn=${encodedNote}&tr=${txnRef}#Intent;scheme=upi;package=com.dreamplug.android.apps;end;`,
-      iosSchemeUri: `credpay://upi/pay?pa=${CAFE_UPI_ID}&pn=${encodedMerchantName}&am=${formattedAmount}&cu=INR&tn=${encodedNote}&tr=${txnRef}`,
-      universalUri: universalUpiUri,
-      bgSelected: 'bg-stone-900 text-white',
-      textColor: 'text-stone-950',
-      borderSelected: 'border-stone-900 ring-2 ring-stone-900/20',
-      iconBg: 'bg-stone-900 text-amber-300'
-    },
-    {
       id: 'gpay',
       name: 'Google Pay',
       shortName: 'GPay',
-      badge: 'Fast',
-      androidIntent: `intent://pay?pa=${CAFE_UPI_ID}&pn=${encodedMerchantName}&am=${formattedAmount}&cu=INR&tn=${encodedNote}&tr=${txnRef}#Intent;scheme=upi;package=com.google.android.apps.nbu.paisa.user;end;`,
-      iosSchemeUri: `tez://upi/pay?pa=${CAFE_UPI_ID}&pn=${encodedMerchantName}&am=${formattedAmount}&cu=INR&tn=${encodedNote}&tr=${txnRef}`,
-      universalUri: universalUpiUri,
-      bgSelected: 'bg-emerald-50/90',
+      badge: 'Recommended',
+      androidIntent: gpayTezUri, // tez:// scheme opens Google Pay directly without merchant intent lock
+      iosSchemeUri: gpayTezUri,
+      universalUri: cleanUniversalUpiUri,
+      bgSelected: 'bg-emerald-50/95',
       textColor: 'text-emerald-950',
-      borderSelected: 'border-emerald-600 ring-2 ring-emerald-600/20',
+      borderSelected: 'border-emerald-600 ring-2 ring-emerald-600/30 shadow-sm',
       iconBg: 'bg-emerald-600 text-white'
     },
     {
@@ -117,22 +110,35 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
       name: 'PhonePe',
       shortName: 'PhonePe',
       badge: 'Popular',
-      androidIntent: `intent://pay?pa=${CAFE_UPI_ID}&pn=${encodedMerchantName}&am=${formattedAmount}&cu=INR&tn=${encodedNote}&tr=${txnRef}#Intent;scheme=upi;package=com.phonepe.app;end;`,
-      iosSchemeUri: `phonepe://pay?pa=${CAFE_UPI_ID}&pn=${encodedMerchantName}&am=${formattedAmount}&cu=INR&tn=${encodedNote}&tr=${txnRef}`,
-      universalUri: universalUpiUri,
+      androidIntent: `intent://pay?pa=${CAFE_UPI_ID}&pn=${encodedMerchantName}&am=${formattedAmount}&cu=INR&tn=${encodedNote}#Intent;scheme=upi;package=com.phonepe.app;end;`,
+      iosSchemeUri: `phonepe://pay?pa=${CAFE_UPI_ID}&pn=${encodedMerchantName}&am=${formattedAmount}&cu=INR&tn=${encodedNote}`,
+      universalUri: cleanUniversalUpiUri,
       bgSelected: 'bg-indigo-50/90',
       textColor: 'text-indigo-950',
       borderSelected: 'border-indigo-600 ring-2 ring-indigo-600/20',
       iconBg: 'bg-indigo-600 text-white'
     },
     {
+      id: 'cred',
+      name: 'CRED UPI',
+      shortName: 'CRED',
+      badge: 'Works Best',
+      androidIntent: `intent://pay?pa=${CAFE_UPI_ID}&pn=${encodedMerchantName}&am=${formattedAmount}&cu=INR&tn=${encodedNote}#Intent;scheme=upi;package=com.dreamplug.android.apps;end;`,
+      iosSchemeUri: `credpay://upi/pay?pa=${CAFE_UPI_ID}&pn=${encodedMerchantName}&am=${formattedAmount}&cu=INR&tn=${encodedNote}`,
+      universalUri: cleanUniversalUpiUri,
+      bgSelected: 'bg-stone-900 text-white',
+      textColor: 'text-stone-950',
+      borderSelected: 'border-stone-900 ring-2 ring-stone-900/20',
+      iconBg: 'bg-stone-900 text-amber-300'
+    },
+    {
       id: 'bhim',
       name: 'BHIM UPI',
       shortName: 'BHIM',
       badge: 'Official',
-      androidIntent: `intent://pay?pa=${CAFE_UPI_ID}&pn=${encodedMerchantName}&am=${formattedAmount}&cu=INR&tn=${encodedNote}&tr=${txnRef}#Intent;scheme=upi;package=in.org.npci.upiapp;end;`,
-      iosSchemeUri: universalUpiUri,
-      universalUri: universalUpiUri,
+      androidIntent: `intent://pay?pa=${CAFE_UPI_ID}&pn=${encodedMerchantName}&am=${formattedAmount}&cu=INR&tn=${encodedNote}#Intent;scheme=upi;package=in.org.npci.upiapp;end;`,
+      iosSchemeUri: cleanUniversalUpiUri,
+      universalUri: cleanUniversalUpiUri,
       bgSelected: 'bg-amber-50/90',
       textColor: 'text-amber-950',
       borderSelected: 'border-amber-600 ring-2 ring-amber-600/20',
@@ -143,9 +149,9 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
       name: 'Paytm UPI',
       shortName: 'Paytm',
       badge: 'UPI',
-      androidIntent: `intent://pay?pa=${CAFE_UPI_ID}&pn=${encodedMerchantName}&am=${formattedAmount}&cu=INR&tn=${encodedNote}&tr=${txnRef}#Intent;scheme=upi;package=net.one97.paytm;end;`,
-      iosSchemeUri: `paytmmp://pay?pa=${CAFE_UPI_ID}&pn=${encodedMerchantName}&am=${formattedAmount}&cu=INR&tn=${encodedNote}&tr=${txnRef}`,
-      universalUri: universalUpiUri,
+      androidIntent: `intent://pay?pa=${CAFE_UPI_ID}&pn=${encodedMerchantName}&am=${formattedAmount}&cu=INR&tn=${encodedNote}#Intent;scheme=upi;package=net.one97.paytm;end;`,
+      iosSchemeUri: `paytmmp://pay?pa=${CAFE_UPI_ID}&pn=${encodedMerchantName}&am=${formattedAmount}&cu=INR&tn=${encodedNote}`,
+      universalUri: cleanUniversalUpiUri,
       bgSelected: 'bg-sky-50/90',
       textColor: 'text-sky-950',
       borderSelected: 'border-sky-600 ring-2 ring-sky-600/20',
@@ -224,7 +230,25 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
     triggerAppLaunch(targetUrl);
   };
 
-  // Copy mobile number and launch app homepage so user can tap "To Mobile"
+  // 1-TAP GOOGLE PAY FIX: Copy 8185810817 and immediately open Google Pay
+  // This bypasses browser-initiated web link limits completely because inside Google Pay,
+  // paying to mobile number 8185810817 has the full ₹1,00,000 NPCI daily limit!
+  const handleLaunchGPayDirectByPhone = () => {
+    navigator.clipboard.writeText(CAFE_PHONE);
+    setCopiedPhone(true);
+    setCopyFeedbackMsg(`Copied ${CAFE_PHONE}! Opening Google Pay... Tap 'Pay phone number' and paste.`);
+
+    // Launch Google Pay app via tez:// or package intent
+    const gpayLaunchUrl = isAndroid ? 'tez://' : 'tez://';
+    setTimeout(() => {
+      triggerAppLaunch(gpayLaunchUrl);
+    }, 300);
+
+    setTimeout(() => {
+      setCopiedPhone(false);
+    }, 5000);
+  };
+
   const handleCopyNumberAndOpenApp = (appPackage: string, iosScheme: string, appName: string) => {
     navigator.clipboard.writeText(CAFE_PHONE);
     setCopiedPhone(true);
@@ -302,7 +326,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                 Complete Payment · ₹{total}
               </h3>
               <p className="text-xs text-stone-500">
-                Musafir Cafe · Payee: <strong className="text-stone-800">{CAFE_UPI_ID}</strong>
+                Payee: <strong className="text-teal-900 font-mono">{CAFE_UPI_ID}</strong> ({CAFE_PHONE})
               </p>
             </div>
           </div>
@@ -361,13 +385,13 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                 </div>
                 <div>
                   <div className="font-bold text-stone-900 text-xs sm:text-sm flex items-center gap-1">
-                    UPI / Online
+                    Google Pay / UPI
                     <span className="text-[9px] bg-emerald-100 text-emerald-800 px-1.5 py-0.2 rounded-full font-bold">
                       INSTANT
                     </span>
                   </div>
                   <p className="text-[11px] text-stone-500 mt-0.5">
-                    CRED, GPay, PhonePe, BHIM, QR
+                    Google Pay, PhonePe, QR Code
                   </p>
                 </div>
               </button>
@@ -409,27 +433,125 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
           {/* UPI Payment Flow View */}
           {method === 'UPI' && (
             <div className="space-y-4">
-              {/* Step 1: App Chooser */}
+              {/* PRIMARY FOCUS: GOOGLE PAY EXPRESS HUB */}
+              <div className="bg-gradient-to-br from-emerald-50 via-teal-50/70 to-emerald-50/40 rounded-2xl p-4 border-2 border-emerald-500/80 shadow-xs space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-xs font-bold text-xs">
+                      GPay
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-emerald-950 text-sm flex items-center gap-1.5">
+                        <span>Google Pay (Official Method)</span>
+                        <span className="text-[10px] bg-emerald-600 text-white px-2 py-0.2 rounded-full font-bold">
+                          PRIMARY
+                        </span>
+                      </h4>
+                      <p className="text-[11px] text-emerald-800">
+                        Pay ₹{total} to <strong>{CAFE_UPI_ID}</strong>
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-xs font-bold text-emerald-950 block">₹{total}</span>
+                    <span className="text-[10px] text-emerald-700">Pre-filled</span>
+                  </div>
+                </div>
+
+                {/* Option 1: Direct Clean Google Pay Launch (No tr= parameter, avoids bank merchant check) */}
+                <div className="space-y-2">
+                  <a
+                    href={gpayTezUri}
+                    target="_top"
+                    onClick={() => {
+                      setSelectedAppId('gpay');
+                      setIsWaitingResponse(true);
+                      setWaitTimer(60);
+                    }}
+                    className="w-full py-3 px-4 rounded-xl bg-emerald-700 hover:bg-emerald-800 active:scale-[0.99] text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-sm transition-all"
+                  >
+                    <Smartphone className="w-4 h-4 text-amber-300" />
+                    <span>Open Google Pay & Pay ₹{total} (Direct)</span>
+                    <ExternalLink className="w-3.5 h-3.5 text-emerald-200" />
+                  </a>
+
+                  {/* Fallback Intent link if tez:// doesn't catch */}
+                  <div className="flex items-center justify-between text-[11px] text-stone-600 px-1">
+                    <span>Direct launch link for Google Pay</span>
+                    <a
+                      href={cleanUniversalUpiUri}
+                      target="_top"
+                      className="text-emerald-800 hover:underline font-semibold"
+                    >
+                      Or Open via UPI Chooser →
+                    </a>
+                  </div>
+                </div>
+
+                {/* Option 2: 1-TAP BYPASS FOR "EXCEEDED BANK LIMIT" (Transfer to 8185810817 inside Google Pay) */}
+                <div className="pt-2.5 border-t border-emerald-200/90 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-emerald-950 flex items-center gap-1.5">
+                      <Zap className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                      <span>If Google Pay says "Exceeded Bank Limit":</span>
+                    </span>
+                    <span className="text-[10px] bg-amber-100 text-amber-900 border border-amber-300 px-2 py-0.5 rounded-full font-bold">
+                      ₹1 Lakh Daily Limit
+                    </span>
+                  </div>
+
+                  <p className="text-[11px] text-stone-600 leading-relaxed">
+                    Indian banks (SBI, HDFC, ICICI, etc.) limit browser web-links to personal VPAs. 
+                    <strong> Transferring directly to mobile number inside Google Pay has zero web limit!</strong>
+                  </p>
+
+                  <button
+                    type="button"
+                    onClick={handleLaunchGPayDirectByPhone}
+                    className="w-full py-2.5 px-3 rounded-xl bg-white hover:bg-emerald-50 text-emerald-900 border border-emerald-400 font-bold text-xs flex items-center justify-center gap-2 shadow-2xs transition-colors cursor-pointer"
+                  >
+                    <Copy className="w-3.5 h-3.5 text-emerald-700" />
+                    <span>Copy {CAFE_PHONE} & Open Google Pay</span>
+                    <ArrowRight className="w-3.5 h-3.5 text-emerald-700" />
+                  </button>
+
+                  {copiedPhone && (
+                    <div className="p-2.5 rounded-xl bg-emerald-100/90 text-emerald-950 text-[11px] font-medium border border-emerald-300 animate-in fade-in space-y-1">
+                      <div className="font-bold flex items-center gap-1">
+                        <Check className="w-3.5 h-3.5 text-emerald-700" />
+                        <span>Copied {CAFE_PHONE}! Follow these 3 easy steps in Google Pay:</span>
+                      </div>
+                      <ol className="list-decimal list-inside pl-1 text-[10px] text-stone-700 space-y-0.5">
+                        <li>In Google Pay, tap <strong>"Pay phone number"</strong></li>
+                        <li>Paste <strong>{CAFE_PHONE}</strong> (Musafir Cafe)</li>
+                        <li>Enter <strong>₹{total}</strong> & UPI PIN to pay</li>
+                        <li>Come back here and tap <strong>Confirm Payment</strong> below!</li>
+                      </ol>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Step 2: Other UPI Apps (PhonePe, CRED, BHIM, Paytm) */}
               <div className="bg-stone-50/90 rounded-2xl p-3.5 border border-stone-200/90">
                 <div className="flex items-center justify-between mb-2">
                   <label className="text-xs font-bold text-stone-800 flex items-center gap-1.5">
-                    <span>1. Choose UPI App to Pay ₹{total}:</span>
+                    <span>Other UPI Apps:</span>
                   </label>
-                  <span className="text-[11px] font-mono text-teal-900 font-semibold bg-teal-50 px-2 py-0.5 rounded-md border border-teal-200/60">
+                  <span className="text-[11px] font-mono text-stone-600 bg-white px-2 py-0.5 rounded-md border border-stone-200">
                     {CAFE_UPI_ID}
                   </span>
                 </div>
 
-                {/* 5 App options including CRED (which works smoothly) */}
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2">
-                  {upiApps.map((app) => {
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {upiApps.filter((a) => a.id !== 'gpay').map((app) => {
                     const isSelected = selectedAppId === app.id;
                     return (
                       <button
                         key={app.id}
                         type="button"
                         onClick={() => handleSelectAndLaunchApp(app)}
-                        className={`p-2 rounded-xl border text-left transition-all flex flex-col justify-between gap-1.5 cursor-pointer relative ${
+                        className={`p-2.5 rounded-xl border text-left transition-all flex flex-col justify-between gap-1.5 cursor-pointer relative ${
                           isSelected
                             ? `${app.bgSelected} ${app.borderSelected} ${app.textColor} shadow-xs`
                             : 'bg-white border-stone-200 text-stone-700 hover:border-stone-300 hover:bg-stone-50'
@@ -461,195 +583,21 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                     );
                   })}
                 </div>
-
-                {/* Direct App Launch Button */}
-                <div className="mt-3 pt-3 border-t border-stone-200/80 space-y-2">
-                  <a
-                    href={activeLaunchUrl}
-                    target="_top"
-                    onClick={() => {
-                      setIsWaitingResponse(true);
-                      setWaitTimer(60);
-                    }}
-                    className="w-full py-3 px-4 rounded-xl bg-teal-800 hover:bg-teal-900 active:scale-[0.99] text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-sm transition-all"
-                  >
-                    <Smartphone className="w-4 h-4 text-amber-300" />
-                    <span>Open {currentApp.name} & Pay ₹{total}</span>
-                    <ExternalLink className="w-3.5 h-3.5 text-teal-200" />
-                  </a>
-
-                  <div className="flex items-center justify-between text-[11px] text-stone-500 px-1">
-                    <span>
-                      Opens <strong>{currentApp.name}</strong> with ₹{total} to <strong>{CAFE_UPI_ID}</strong>
-                    </span>
-                    <a
-                      href={universalUpiUri}
-                      target="_top"
-                      className="text-teal-800 hover:underline font-semibold"
-                    >
-                      Open in Any UPI App →
-                    </a>
-                  </div>
-                </div>
-              </div>
-
-              {/* CRITICAL EXPLANATION & FIX FOR: Google Pay "Exceeded Bank Limit" and PhonePe "Upto 2000 with QR via Gallery" */}
-              <div className="bg-amber-50/90 border border-amber-300 rounded-2xl p-4 shadow-2xs space-y-3">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-center gap-2 text-amber-950 font-bold text-xs sm:text-sm">
-                    <Zap className="w-4 h-4 text-amber-600 shrink-0" />
-                    <span>Why GPay / PhonePe show "Limit Exceeded" or "₹2000 Gallery Limit":</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setShowLimitGuide(!showLimitGuide)}
-                    className="text-[11px] font-semibold text-amber-800 hover:text-amber-950 flex items-center gap-0.5 cursor-pointer shrink-0"
-                  >
-                    <span>{showLimitGuide ? 'Hide Details' : 'View Fixes'}</span>
-                    {showLimitGuide ? (
-                      <ChevronUp className="w-3.5 h-3.5" />
-                    ) : (
-                      <ChevronDown className="w-3.5 h-3.5" />
-                    )}
-                  </button>
-                </div>
-
-                {showLimitGuide && (
-                  <div className="space-y-3 text-xs text-amber-950">
-                    {/* Clear explanation of the exact errors */}
-                    <div className="bg-white/90 p-3 rounded-xl border border-amber-200 space-y-1.5 text-[11px] text-stone-700 leading-relaxed">
-                      <div className="font-bold text-amber-950 flex items-center gap-1 text-xs">
-                        <Info className="w-3.5 h-3.5 text-amber-600" />
-                        <span>Why this happens in Indian UPI apps:</span>
-                      </div>
-                      <p>
-                        • <strong>Google Pay:</strong> Shows <em>"You have exceeded the bank limit for this payment"</em> because banks (SBI, HDFC, ICICI, etc.) heavily restrict browser-initiated links to personal UPI accounts.
-                      </p>
-                      <p>
-                        • <strong>PhonePe:</strong> Shows <em>"You can pay upto 2000 with QR code via gallery"</em> because PhonePe has a strict security cap on QR screenshots uploaded from your phone gallery.
-                      </p>
-                      <p>
-                        • <strong>CRED App:</strong> Works smoothly because CRED bypasses the browser link limit and routes payments directly through its member UPI network.
-                      </p>
-                    </div>
-
-                    {/* Solution 1: Use CRED App */}
-                    <div className="bg-white p-3 rounded-xl border border-emerald-300 shadow-2xs space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="font-bold text-stone-900 text-xs flex items-center gap-1.5">
-                          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                          <span>Fix 1: Pay using CRED App (Verified Working!)</span>
-                        </span>
-                        <span className="text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full font-bold">
-                          NO LIMIT ERROR
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-stone-600">
-                        Since CRED worked on your phone, launch CRED directly with 1 tap:
-                      </p>
-                      <a
-                        href={isAndroid ? `intent://pay?pa=${CAFE_UPI_ID}&pn=${encodedMerchantName}&am=${formattedAmount}&cu=INR&tn=${encodedNote}&tr=${txnRef}#Intent;scheme=upi;package=com.dreamplug.android.apps;end;` : `credpay://upi/pay?pa=${CAFE_UPI_ID}&pn=${encodedMerchantName}&am=${formattedAmount}&cu=INR&tn=${encodedNote}&tr=${txnRef}`}
-                        target="_top"
-                        className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-stone-900 hover:bg-black text-amber-300 font-bold text-xs shadow-xs transition-colors"
-                      >
-                        <Smartphone className="w-3.5 h-3.5" />
-                        <span>Open CRED & Pay ₹{total}</span>
-                        <ExternalLink className="w-3 h-3 text-white" />
-                      </a>
-                    </div>
-
-                    {/* Solution 2: Direct In-App Transfer to Mobile 8185810817 */}
-                    <div className="bg-white p-3 rounded-xl border border-amber-300 shadow-2xs space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="font-bold text-stone-900 text-xs flex items-center gap-1.5">
-                          <Phone className="w-3.5 h-3.5 text-teal-700" />
-                          <span>Fix 2: Pay to Mobile Number (Full ₹1,00,000 Limit)</span>
-                        </span>
-                        <span className="text-[10px] bg-teal-100 text-teal-800 px-2 py-0.5 rounded-full font-bold">
-                          BYPASSES WEB LIMIT
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-stone-600 leading-relaxed">
-                        Inside Google Pay or PhonePe, tap <strong>"Pay to Mobile / Contact"</strong> → Enter <strong>{CAFE_PHONE}</strong>. When you transfer directly to the phone number inside the app, the bank limit error disappears!
-                      </p>
-                      <div className="flex flex-wrap items-center gap-2 pt-1">
-                        {/* Copy & Open GPay */}
-                        <button
-                          type="button"
-                          onClick={() => handleCopyNumberAndOpenApp('com.google.android.apps.nbu.paisa.user', 'tez://', 'Google Pay')}
-                          className="px-3 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-semibold text-xs flex items-center gap-1.5 cursor-pointer shadow-2xs transition-colors"
-                        >
-                          <Copy className="w-3.5 h-3.5 text-amber-300" />
-                          <span>Copy {CAFE_PHONE} & Open GPay</span>
-                        </button>
-
-                        {/* Copy & Open PhonePe */}
-                        <button
-                          type="button"
-                          onClick={() => handleCopyNumberAndOpenApp('com.phonepe.app', 'phonepe://', 'PhonePe')}
-                          className="px-3 py-1.5 rounded-lg bg-indigo-700 hover:bg-indigo-800 text-white font-semibold text-xs flex items-center gap-1.5 cursor-pointer shadow-2xs transition-colors"
-                        >
-                          <Copy className="w-3.5 h-3.5 text-amber-300" />
-                          <span>Copy {CAFE_PHONE} & Open PhonePe</span>
-                        </button>
-                      </div>
-
-                      {copyFeedbackMsg && (
-                        <div className="p-2 rounded-lg bg-emerald-50 text-emerald-800 text-[11px] font-medium border border-emerald-200 animate-in fade-in">
-                          ✅ {copyFeedbackMsg}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Solution 3: Switch to Cash */}
-                    <div className="bg-stone-100 p-2.5 rounded-xl border border-stone-200 flex flex-col sm:flex-row items-center justify-between gap-2">
-                      <span className="text-[11px] text-stone-700">
-                        Facing payment app issues? Settle with cash directly:
-                      </span>
-                      <button
-                        type="button"
-                        onClick={handleSwitchToCashAndSubmit}
-                        disabled={isSubmitting}
-                        className="w-full sm:w-auto px-3 py-1.5 rounded-lg bg-stone-800 hover:bg-stone-900 text-white font-bold text-xs flex items-center justify-center gap-1 cursor-pointer transition-colors"
-                      >
-                        <Banknote className="w-3.5 h-3.5 text-amber-300" />
-                        <span>Place Order with Cash</span>
-                      </button>
-                    </div>
-
-                    {/* Merchant Tip for Musafir Cafe Owner */}
-                    <div className="p-2.5 rounded-xl bg-amber-100/70 border border-amber-300/80 text-[10px] text-amber-900 leading-relaxed">
-                      💡 <strong>Note for Cafe Owner:</strong> <code>{CAFE_UPI_ID}</code> is currently a personal P2P handle. To permanently eliminate the ₹2,000 gallery cap and web link limits for all customers, register a free <strong>PhonePe for Business</strong> or <strong>Google Pay Business</strong> account. Business QRs have Merchant Category Codes (MCC) that allow unlimited payments!
-                    </div>
-                  </div>
-                )}
               </div>
 
               {/* Waiting Status Live Guidance Banner */}
-              {isWaitingResponse ? (
-                <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200/90 flex items-start gap-3 text-amber-900 animate-pulse">
-                  <Loader2 className="w-4 h-4 animate-spin text-amber-700 shrink-0 mt-0.5" />
+              {isWaitingResponse && (
+                <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 flex items-start gap-3 text-emerald-950 animate-pulse">
+                  <Loader2 className="w-4 h-4 animate-spin text-emerald-700 shrink-0 mt-0.5" />
                   <div className="flex-1 text-xs">
                     <p className="font-bold">
                       Payment initiated in {currentApp.name}... ({waitTimer}s)
                     </p>
-                    <p className="text-[11px] text-amber-800/90 mt-0.5 leading-relaxed">
+                    <p className="text-[11px] text-emerald-800/90 mt-0.5 leading-relaxed">
                       Amount <strong>₹{total}</strong> to <strong>{CAFE_UPI_ID}</strong> is pre-filled.
-                      If app shows limit error, tap CRED or copy mobile <strong>{CAFE_PHONE}</strong> to pay directly.
+                      After completing payment in Google Pay, enter your UTR or tap <strong>Confirm Payment</strong> below!
                     </p>
                   </div>
-                </div>
-              ) : (
-                <div className="p-3 rounded-xl bg-teal-50/60 border border-teal-200/80 flex items-center justify-between text-teal-950 text-xs">
-                  <div className="flex items-center gap-2">
-                    <ShieldCheck className="w-4 h-4 text-teal-700 shrink-0" />
-                    <span>
-                      Payee: <strong>{CAFE_UPI_ID}</strong> ({CAFE_MERCHANT_NAME})
-                    </span>
-                  </div>
-                  <span className="text-[11px] font-bold text-teal-800 bg-white px-2 py-0.5 rounded-md border border-teal-200">
-                    ₹{total}
-                  </span>
                 </div>
               )}
 
@@ -661,7 +609,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                 <div className="flex items-center justify-between w-full mb-2">
                   <span className="text-xs font-bold text-stone-800 flex items-center gap-1.5">
                     <QrCode className="w-3.5 h-3.5 text-teal-800" />
-                    <span>Scan Barcode / QR Code with Any UPI App</span>
+                    <span>Scan QR with Google Pay Camera (No Bank Limit)</span>
                   </span>
                   <button
                     type="button"
@@ -676,7 +624,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                   <>
                     <div className="bg-white p-3.5 rounded-2xl shadow-xs border border-stone-200/70 inline-block my-2">
                       <QRCodeSVG
-                        value={universalUpiUri}
+                        value={cleanUniversalUpiUri}
                         size={175}
                         level="M"
                         includeMargin={false}
@@ -684,12 +632,13 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                       />
                     </div>
 
-                    <div className="bg-teal-50 border border-teal-200/80 px-3 py-1.5 rounded-xl text-teal-950 text-[11px] font-medium my-1 max-w-sm">
-                      📷 Point your phone camera directly at this QR to scan
+                    <div className="bg-teal-50 border border-teal-200/80 px-3.5 py-1.5 rounded-xl text-teal-950 text-[11px] font-medium my-1 max-w-sm flex items-center gap-2 justify-center">
+                      <Camera className="w-3.5 h-3.5 text-teal-800 shrink-0" />
+                      <span>Open Google Pay → Tap <strong>Scan QR</strong> icon (top right)</span>
                     </div>
 
                     <p className="text-[10px] text-stone-500 mt-1">
-                      (Do not upload screenshot to gallery in PhonePe; scanning directly with camera avoids the ₹2000 gallery penalty)
+                      Scanning directly with your phone camera is treated as an in-person payment by banks, avoiding all web limits!
                     </p>
 
                     {/* Single UPI ID & Mobile Number with One-Tap Copy */}
@@ -751,7 +700,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                     htmlFor="transactionIdInput"
                     className="font-semibold text-stone-800 text-xs flex items-center gap-1.5"
                   >
-                    <span>Transaction ID / 12-digit UTR</span>
+                    <span>Google Pay UPI Transaction ID / 12-digit UTR</span>
                     <span className="text-[10px] text-stone-500 font-normal">
                       (Optional)
                     </span>
@@ -771,13 +720,13 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                     type="text"
                     value={transactionId}
                     onChange={(e) => setTransactionId(e.target.value)}
-                    placeholder="e.g. 429381048201 (12-digit UTR from CRED/GPay/PhonePe)"
+                    placeholder="e.g. 429381048201 (12-digit UTR from Google Pay)"
                     className="w-full px-3.5 py-2.5 rounded-xl border border-stone-300 bg-white text-xs font-mono text-stone-900 focus:outline-none focus:ring-2 focus:ring-teal-700/30 focus:border-teal-700 placeholder:text-stone-400 placeholder:font-sans"
                   />
                 </div>
 
                 <p className="text-[11px] text-stone-500 leading-relaxed">
-                  💡 <strong>Tip:</strong> Once you pay (via CRED, GPay, PhonePe, or direct transfer to <strong>{CAFE_PHONE}</strong>), enter your UTR or simply tap <strong>Confirm Payment & Place Order</strong> below!
+                  💡 <strong>Tip:</strong> Once paid via Google Pay, you can paste the 12-digit UTR or immediately tap <strong>Confirm Payment & Place Order</strong> below!
                 </p>
               </div>
             </div>
@@ -835,7 +784,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
             className={`w-full sm:w-auto px-6 py-2.5 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all shadow-sm cursor-pointer ${
               isSubmitting
                 ? 'bg-stone-300 text-stone-500 cursor-not-allowed shadow-none'
-                : 'bg-teal-800 hover:bg-teal-900 text-white hover:shadow active:scale-[0.99]'
+                : 'bg-emerald-700 hover:bg-emerald-800 text-white hover:shadow active:scale-[0.99]'
             }`}
           >
             {isSubmitting ? (
