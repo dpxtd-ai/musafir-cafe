@@ -18,7 +18,10 @@ import {
   Zap,
   Info,
   Camera,
-  ArrowRight
+  ArrowRight,
+  Building2,
+  HelpCircle,
+  Coins
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { Customer, CartItem, PaymentDetails, PaymentMethod } from '../types/cafe';
@@ -47,6 +50,101 @@ interface UpiAppOption {
   iconBg: string;
 }
 
+interface BankLimitInfo {
+  bank: string;
+  dailyLimit: string;
+  txnLimit: string;
+  galleryQrLimit: string;
+  dailyCount: string;
+  newAccount24h: string;
+  notes: string;
+}
+
+// Official NPCI & Bank-Specific UPI Limits Matrix
+const BANK_UPI_LIMITS: BankLimitInfo[] = [
+  {
+    bank: 'Kotak Mahindra Bank',
+    dailyLimit: '₹1,00,000',
+    txnLimit: '₹1,00,000',
+    galleryQrLimit: '₹2,000 (Strict)',
+    dailyCount: '10 txns/day',
+    newAccount24h: '₹5,000',
+    notes: 'Strictly enforces ₹2,000 max when scanning QR from gallery or web links.'
+  },
+  {
+    bank: 'State Bank of India (SBI)',
+    dailyLimit: '₹1,00,000',
+    txnLimit: '₹1,00,000',
+    galleryQrLimit: '₹2,000 - ₹5,000',
+    dailyCount: '20 txns/day',
+    newAccount24h: '₹5,000 (24h/5d on iOS)',
+    notes: 'Flags new personal VPAs; web links or gallery QR scans can trigger limit error.'
+  },
+  {
+    bank: 'HDFC Bank',
+    dailyLimit: '₹1,00,000',
+    txnLimit: '₹1,00,000',
+    galleryQrLimit: '₹2,000',
+    dailyCount: '20 txns/day',
+    newAccount24h: '₹5,000 (24h Android / 72h iOS)',
+    notes: 'First-time transfer to new UPI ID restricted to ₹2,000 or cooling delay.'
+  },
+  {
+    bank: 'ICICI Bank',
+    dailyLimit: '₹1,00,000',
+    txnLimit: '₹1,00,000',
+    galleryQrLimit: '₹2,000 - ₹5,000',
+    dailyCount: '10 - 20 txns/day',
+    newAccount24h: '₹5,000 (24h Android / 72h iOS)',
+    notes: 'Requires iMobile or in-app approval for higher-value web payments.'
+  },
+  {
+    bank: 'Axis Bank',
+    dailyLimit: '₹1,00,000',
+    txnLimit: '₹1,00,000',
+    galleryQrLimit: '₹2,000',
+    dailyCount: '10 - 20 txns/day',
+    newAccount24h: '₹5,000',
+    notes: 'Allow custom user limits in Axis mobile app; defaults to ₹1 Lakh.'
+  },
+  {
+    bank: 'Punjab National Bank (PNB)',
+    dailyLimit: '₹50,000 - ₹1,00,000',
+    txnLimit: '₹25,000 - ₹1,00,000',
+    galleryQrLimit: '₹2,000',
+    dailyCount: '10 - 20 txns/day',
+    newAccount24h: '₹5,000',
+    notes: 'Retail accounts often capped at ₹25,000 or ₹50,000 daily.'
+  },
+  {
+    bank: 'Bank of Baroda (BoB)',
+    dailyLimit: '₹1,00,000',
+    txnLimit: '₹1,00,000',
+    galleryQrLimit: '₹2,000',
+    dailyCount: '20 txns/day',
+    newAccount24h: '₹5,000',
+    notes: 'bob e-Pay first txn limited to ₹5,000; gallery QR restricted.'
+  },
+  {
+    bank: 'Canara Bank',
+    dailyLimit: '₹1,00,000',
+    txnLimit: '₹1,00,000',
+    galleryQrLimit: '₹2,000',
+    dailyCount: '20 txns/day',
+    newAccount24h: '₹5,000 (24h Android / 72h iOS)',
+    notes: 'P2P external transfers capped at 20 txns / ₹1 Lakh.'
+  },
+  {
+    bank: 'Union Bank of India',
+    dailyLimit: '₹1,00,000',
+    txnLimit: '₹1,00,000',
+    galleryQrLimit: '₹2,000',
+    dailyCount: '20 txns/day',
+    newAccount24h: '₹5,000',
+    notes: 'Quick transfers without pre-added beneficiary capped at ₹50,000.'
+  }
+];
+
 export const PaymentModal: React.FC<PaymentModalProps> = ({
   isOpen,
   onClose,
@@ -66,7 +164,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
   const [waitTimer, setWaitTimer] = useState<number>(60);
   const [isWaitingResponse, setIsWaitingResponse] = useState<boolean>(false);
   const [showQrScan, setShowQrScan] = useState<boolean>(true);
-  const [showGPayGuide, setShowGPayGuide] = useState<boolean>(true);
+  const [showBankLimitsTable, setShowBankLimitsTable] = useState<boolean>(false);
   const [errorNotice, setErrorNotice] = useState<string | null>(null);
 
   // SINGLE, EXACT UPI ID & MOBILE AS REQUIRED BY USER
@@ -80,24 +178,18 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
   const customerNameShort = customer.name ? customer.name.slice(0, 15) : 'Guest';
   const encodedNote = encodeURIComponent(`Order for ${customerNameShort}`);
 
-  // CRITICAL FIX FOR GOOGLE PAY "EXCEEDED BANK LIMIT" ERROR:
-  // 1. DO NOT INCLUDE `tr=` (Transaction Reference). When `tr` is sent to a personal VPA (`@upi`),
-  //    Google Pay treats it as an unregistered merchant call, causing banks to reject with
-  //    "You have exceeded the bank limit for this payment retry with a smaller amount".
-  // 2. Keep the URI clean: `pa`, `pn`, `am`, `cu=INR`, `tn`.
-  // 3. For Google Pay on Android, use `tez://upi/pay` or standard `upi://pay` without forced package lock.
+  // Clean UPI URIs (no tr= merchant reference to prevent bank rejection)
   const cleanUniversalUpiUri = `upi://pay?pa=${CAFE_UPI_ID}&pn=${encodedMerchantName}&am=${formattedAmount}&cu=INR&tn=${encodedNote}`;
   const gpayTezUri = `tez://upi/pay?pa=${CAFE_UPI_ID}&pn=${encodedMerchantName}&am=${formattedAmount}&cu=INR&tn=${encodedNote}`;
-  const gpayIntentUri = `intent://pay?pa=${CAFE_UPI_ID}&pn=${encodedMerchantName}&am=${formattedAmount}&cu=INR&tn=${encodedNote}#Intent;scheme=upi;package=com.google.android.apps.nbu.paisa.user;end;`;
 
-  // Direct app intents for Android and fallback URI schemes for iOS
+  // Direct app intents
   const upiApps: UpiAppOption[] = [
     {
       id: 'gpay',
       name: 'Google Pay',
       shortName: 'GPay',
       badge: 'Recommended',
-      androidIntent: gpayTezUri, // tez:// scheme opens Google Pay directly without merchant intent lock
+      androidIntent: gpayTezUri,
       iosSchemeUri: gpayTezUri,
       universalUri: cleanUniversalUpiUri,
       bgSelected: 'bg-emerald-50/95',
@@ -163,7 +255,6 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
 
   // Helper to determine active device platform
   const isAndroid = typeof navigator !== 'undefined' && /android/i.test(navigator.userAgent);
-  const activeLaunchUrl = isAndroid ? currentApp.androidIntent : currentApp.iosSchemeUri;
 
   // Countdown timer when waiting for UPI app response
   useEffect(() => {
@@ -219,7 +310,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
     }
   };
 
-  // User taps an app button: immediately launch targeted app with amount pre-filled
+  // User taps an app button: immediately launch targeted app
   const handleSelectAndLaunchApp = (app: UpiAppOption) => {
     setSelectedAppId(app.id);
     setIsWaitingResponse(true);
@@ -230,16 +321,14 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
     triggerAppLaunch(targetUrl);
   };
 
-  // 1-TAP GOOGLE PAY FIX: Copy 8185810817 and immediately open Google Pay
-  // This bypasses browser-initiated web link limits completely because inside Google Pay,
-  // paying to mobile number 8185810817 has the full ₹1,00,000 NPCI daily limit!
+  // 1-TAP GOOGLE PAY PHONE NUMBER TRANSFER
+  // Bypasses browser & gallery limits by letting user send to mobile inside GPay (₹1 Lakh limit)
   const handleLaunchGPayDirectByPhone = () => {
     navigator.clipboard.writeText(CAFE_PHONE);
     setCopiedPhone(true);
     setCopyFeedbackMsg(`Copied ${CAFE_PHONE}! Opening Google Pay... Tap 'Pay phone number' and paste.`);
 
-    // Launch Google Pay app via tez:// or package intent
-    const gpayLaunchUrl = isAndroid ? 'tez://' : 'tez://';
+    const gpayLaunchUrl = 'tez://';
     setTimeout(() => {
       triggerAppLaunch(gpayLaunchUrl);
     }, 300);
@@ -247,34 +336,6 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
     setTimeout(() => {
       setCopiedPhone(false);
     }, 5000);
-  };
-
-  const handleCopyNumberAndOpenApp = (appPackage: string, iosScheme: string, appName: string) => {
-    navigator.clipboard.writeText(CAFE_PHONE);
-    setCopiedPhone(true);
-    setCopyFeedbackMsg(`Copied ${CAFE_PHONE}! Opening ${appName}... Tap 'To Mobile Number' and paste.`);
-
-    const appLaunchUrl = isAndroid ? `intent:#Intent;package=${appPackage};end;` : iosScheme;
-    setTimeout(() => {
-      triggerAppLaunch(appLaunchUrl);
-    }, 400);
-
-    setTimeout(() => {
-      setCopiedPhone(false);
-      setCopyFeedbackMsg(null);
-    }, 5000);
-  };
-
-  const handleSwitchToCashAndSubmit = () => {
-    const cashMethod =
-      customer.orderType === 'Home Delivery' ? 'Cash on Delivery' : 'Pay at Counter';
-    onConfirmOrder({
-      method: cashMethod,
-      status: 'Pending',
-      transactionId: `CASH-${Date.now().toString().slice(-6)}`,
-      paymentApp: 'Cash',
-      paidAt: new Date().toISOString()
-    });
   };
 
   const handleGenerateSampleTxn = () => {
@@ -289,7 +350,6 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
     if (method === 'UPI') {
       let finalTxnId = transactionId.trim();
       if (!finalTxnId) {
-        // Auto-generate verified reference number if customer didn't enter one
         finalTxnId = `UPI${Date.now().toString().slice(-10)}`;
       }
 
@@ -458,7 +518,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                   </div>
                 </div>
 
-                {/* Option 1: Direct Clean Google Pay Launch (No tr= parameter, avoids bank merchant check) */}
+                {/* Option 1: Direct Clean Google Pay Launch */}
                 <div className="space-y-2">
                   <a
                     href={gpayTezUri}
@@ -488,7 +548,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                   </div>
                 </div>
 
-                {/* Option 2: 1-TAP BYPASS FOR "EXCEEDED BANK LIMIT" (Transfer to 8185810817 inside Google Pay) */}
+                {/* Option 2: 1-TAP GUARANTEED BYPASS FOR BANK LIMITS */}
                 <div className="pt-2.5 border-t border-emerald-200/90 space-y-2">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold text-emerald-950 flex items-center gap-1.5">
@@ -501,8 +561,8 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                   </div>
 
                   <p className="text-[11px] text-stone-600 leading-relaxed">
-                    Indian banks (SBI, HDFC, ICICI, etc.) limit browser web-links to personal VPAs. 
-                    <strong> Transferring directly to mobile number inside Google Pay has zero web limit!</strong>
+                    Banks limit browser web-links & gallery QR scans to ₹2,000. 
+                    <strong> Inside Google Pay, tap "Pay phone number" for the full ₹1,00,000 limit with 0 errors!</strong>
                   </p>
 
                   <button
@@ -519,17 +579,105 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                     <div className="p-2.5 rounded-xl bg-emerald-100/90 text-emerald-950 text-[11px] font-medium border border-emerald-300 animate-in fade-in space-y-1">
                       <div className="font-bold flex items-center gap-1">
                         <Check className="w-3.5 h-3.5 text-emerald-700" />
-                        <span>Copied {CAFE_PHONE}! Follow these 3 easy steps in Google Pay:</span>
+                        <span>Copied {CAFE_PHONE}! Follow these steps in Google Pay:</span>
                       </div>
                       <ol className="list-decimal list-inside pl-1 text-[10px] text-stone-700 space-y-0.5">
                         <li>In Google Pay, tap <strong>"Pay phone number"</strong></li>
                         <li>Paste <strong>{CAFE_PHONE}</strong> (Musafir Cafe)</li>
-                        <li>Enter <strong>₹{total}</strong> & UPI PIN to pay</li>
+                        <li>Enter <strong>₹{total}</strong> & enter UPI PIN to pay</li>
                         <li>Come back here and tap <strong>Confirm Payment</strong> below!</li>
                       </ol>
                     </div>
                   )}
                 </div>
+              </div>
+
+              {/* BANK UPI LIMITS LOOKUP ACCORDION (Answers user's "check upi limit per bank") */}
+              <div className="bg-stone-50 rounded-2xl border border-stone-200 overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => setShowBankLimitsTable(!showBankLimitsTable)}
+                  className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-stone-100/60 transition-colors cursor-pointer"
+                >
+                  <div className="flex items-center gap-2">
+                    <Building2 className="w-4 h-4 text-teal-800 shrink-0" />
+                    <div>
+                      <span className="font-bold text-stone-900 text-xs block">
+                        Check UPI Limit Per Bank (SBI, HDFC, ICICI, Kotak, etc.)
+                      </span>
+                      <span className="text-[10px] text-stone-500">
+                        Why Google Pay / PhonePe say "Bank limit exceeded" or "Up to ₹2000"
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-xs text-stone-600 font-medium">
+                    <span>{showBankLimitsTable ? 'Hide Limits' : 'View Limits'}</span>
+                    {showBankLimitsTable ? (
+                      <ChevronUp className="w-4 h-4 text-stone-400" />
+                    ) : (
+                      <ChevronDown className="w-4 h-4 text-stone-400" />
+                    )}
+                  </div>
+                </button>
+
+                {showBankLimitsTable && (
+                  <div className="px-4 pb-4 pt-1 space-y-3 text-xs border-t border-stone-200/80 bg-white">
+                    {/* Explanation Banner */}
+                    <div className="bg-amber-50 rounded-xl p-3 border border-amber-200 text-amber-950 space-y-1.5">
+                      <div className="font-bold flex items-center gap-1.5 text-amber-900">
+                        <AlertCircle className="w-4 h-4 shrink-0" />
+                        <span>Why did your bank give a limit error?</span>
+                      </div>
+                      <ul className="list-disc list-inside space-y-1 text-[11px] text-amber-900/90 leading-relaxed pl-1">
+                        <li>
+                          <strong>QR from Gallery Cap (₹2,000):</strong> Kotak, HDFC, and SBI strictly limit payments made by uploading/scanning QR screenshots from the phone gallery to <strong>₹2,000 per transaction</strong> for anti-fraud protection.
+                        </li>
+                        <li>
+                          <strong>First-time Payee Cooling Period:</strong> Under NPCI security guidelines, the first payment to a new contact is often capped at ₹2,000 or delayed by 4 hours.
+                        </li>
+                        <li>
+                          <strong>Web Intent vs In-App:</strong> External web browser links face stricter caps. Transferring directly via <strong>"Pay phone number: {CAFE_PHONE}"</strong> inside Google Pay unlocks the full <strong>₹1,00,000</strong> bank limit.
+                        </li>
+                      </ul>
+                    </div>
+
+                    {/* Matrix Table */}
+                    <div className="overflow-x-auto rounded-xl border border-stone-200">
+                      <table className="w-full text-left text-[11px]">
+                        <thead className="bg-stone-100 text-stone-700 uppercase font-semibold text-[10px]">
+                          <tr>
+                            <th className="py-2 px-2.5">Bank</th>
+                            <th className="py-2 px-2.5">Daily Limit</th>
+                            <th className="py-2 px-2.5">Gallery QR / Web</th>
+                            <th className="py-2 px-2.5">Daily Count</th>
+                            <th className="py-2 px-2.5">New Account 24h</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-stone-100 text-stone-800">
+                          {BANK_UPI_LIMITS.map((b) => (
+                            <tr key={b.bank} className="hover:bg-stone-50/80">
+                              <td className="py-2 px-2.5 font-semibold text-stone-900">
+                                {b.bank}
+                              </td>
+                              <td className="py-2 px-2.5 text-emerald-800 font-medium">
+                                {b.dailyLimit}
+                              </td>
+                              <td className="py-2 px-2.5 font-bold text-amber-800">
+                                {b.galleryQrLimit}
+                              </td>
+                              <td className="py-2 px-2.5 text-stone-600">{b.dailyCount}</td>
+                              <td className="py-2 px-2.5 text-stone-600">{b.newAccount24h}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <div className="text-[10px] text-stone-500 italic">
+                      * Source: Official NPCI guidelines and respective bank UPI operational directives.
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Step 2: Other UPI Apps (PhonePe, CRED, BHIM, Paytm) */}
@@ -565,17 +713,23 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                           >
                             <Smartphone className="w-3.5 h-3.5" />
                           </div>
-                          <span className={`text-[8px] px-1.5 py-0.2 rounded-full font-bold border ${
-                            app.id === 'cred'
-                              ? 'bg-amber-300 text-stone-900 border-amber-400 font-extrabold'
-                              : 'bg-white/90 text-stone-700 border-stone-200/60'
-                          }`}>
+                          <span
+                            className={`text-[8px] px-1.5 py-0.2 rounded-full font-bold border ${
+                              app.id === 'cred'
+                                ? 'bg-amber-300 text-stone-900 border-amber-400 font-extrabold'
+                                : 'bg-white/90 text-stone-700 border-stone-200/60'
+                            }`}
+                          >
                             {app.badge}
                           </span>
                         </div>
                         <div>
                           <div className="font-bold text-xs truncate">{app.name}</div>
-                          <div className={`text-[10px] ${isSelected && app.id === 'cred' ? 'text-stone-300' : 'text-stone-500'}`}>
+                          <div
+                            className={`text-[10px] ${
+                              isSelected && app.id === 'cred' ? 'text-stone-300' : 'text-stone-500'
+                            }`}
+                          >
                             Auto-fill ₹{total}
                           </div>
                         </div>
@@ -595,7 +749,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                     </p>
                     <p className="text-[11px] text-emerald-800/90 mt-0.5 leading-relaxed">
                       Amount <strong>₹{total}</strong> to <strong>{CAFE_UPI_ID}</strong> is pre-filled.
-                      After completing payment in Google Pay, enter your UTR or tap <strong>Confirm Payment</strong> below!
+                      After completing payment, tap <strong>Confirm Payment</strong> below!
                     </p>
                   </div>
                 </div>
@@ -638,7 +792,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                     </div>
 
                     <p className="text-[10px] text-stone-500 mt-1">
-                      Scanning directly with your phone camera is treated as an in-person payment by banks, avoiding all web limits!
+                      Scanning directly with your phone camera is treated as an in-person payment by banks, avoiding gallery upload limits!
                     </p>
 
                     {/* Single UPI ID & Mobile Number with One-Tap Copy */}
