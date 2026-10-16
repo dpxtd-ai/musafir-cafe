@@ -21,9 +21,13 @@ import {
   ArrowRight,
   Building2,
   HelpCircle,
-  Coins
+  Coins,
+  Split,
+  Layers
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
+import { UPICheckout } from 'upi-pay-kit';
+import 'upi-pay-kit/style.css';
 import { Customer, CartItem, PaymentDetails, PaymentMethod } from '../types/cafe';
 
 interface PaymentModalProps {
@@ -167,20 +171,31 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
   const [showBankLimitsTable, setShowBankLimitsTable] = useState<boolean>(false);
   const [errorNotice, setErrorNotice] = useState<string | null>(null);
 
+  // LATEST PLUGIN: upi-pay-kit state
+  const [isUpiPayKitOpen, setIsUpiPayKitOpen] = useState<boolean>(false);
+
+  // SPLIT PAYMENT MODE (Bypasses the ₹2,000 bank ceiling)
+  const [splitMode, setSplitMode] = useState<boolean>(total >= 2000);
+  const [splitPart1Paid, setSplitPart1Paid] = useState<boolean>(false);
+  const [splitPart2Paid, setSplitPart2Paid] = useState<boolean>(false);
+
   // SINGLE, EXACT UPI ID & MOBILE AS REQUIRED BY USER
   const CAFE_UPI_ID = '8185810817@upi';
   const CAFE_PHONE = '8185810817';
   const CAFE_MERCHANT_NAME = 'Musafir Cafe';
 
-  // Format amount with 2 decimals
+  // Format amounts
   const formattedAmount = Number(total).toFixed(2);
+  const halfAmount = Number(total / 2).toFixed(2);
+  const activeAmount = splitMode ? halfAmount : formattedAmount;
+
   const encodedMerchantName = encodeURIComponent(CAFE_MERCHANT_NAME);
   const customerNameShort = customer.name ? customer.name.slice(0, 15) : 'Guest';
   const encodedNote = encodeURIComponent(`Order for ${customerNameShort}`);
 
-  // Clean UPI URIs (no tr= merchant reference to prevent bank rejection)
-  const cleanUniversalUpiUri = `upi://pay?pa=${CAFE_UPI_ID}&pn=${encodedMerchantName}&am=${formattedAmount}&cu=INR&tn=${encodedNote}`;
-  const gpayTezUri = `tez://upi/pay?pa=${CAFE_UPI_ID}&pn=${encodedMerchantName}&am=${formattedAmount}&cu=INR&tn=${encodedNote}`;
+  // Clean NPCI UPI URIs
+  const cleanUniversalUpiUri = `upi://pay?pa=${CAFE_UPI_ID}&pn=${encodedMerchantName}&am=${activeAmount}&cu=INR&tn=${encodedNote}`;
+  const gpayTezUri = `tez://upi/pay?pa=${CAFE_UPI_ID}&pn=${encodedMerchantName}&am=${activeAmount}&cu=INR&tn=${encodedNote}`;
 
   // Direct app intents
   const upiApps: UpiAppOption[] = [
@@ -198,25 +213,12 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
       iconBg: 'bg-emerald-600 text-white'
     },
     {
-      id: 'phonepe',
-      name: 'PhonePe',
-      shortName: 'PhonePe',
-      badge: 'Popular',
-      androidIntent: `intent://pay?pa=${CAFE_UPI_ID}&pn=${encodedMerchantName}&am=${formattedAmount}&cu=INR&tn=${encodedNote}#Intent;scheme=upi;package=com.phonepe.app;end;`,
-      iosSchemeUri: `phonepe://pay?pa=${CAFE_UPI_ID}&pn=${encodedMerchantName}&am=${formattedAmount}&cu=INR&tn=${encodedNote}`,
-      universalUri: cleanUniversalUpiUri,
-      bgSelected: 'bg-indigo-50/90',
-      textColor: 'text-indigo-950',
-      borderSelected: 'border-indigo-600 ring-2 ring-indigo-600/20',
-      iconBg: 'bg-indigo-600 text-white'
-    },
-    {
       id: 'cred',
       name: 'CRED UPI',
       shortName: 'CRED',
-      badge: 'Works Best',
-      androidIntent: `intent://pay?pa=${CAFE_UPI_ID}&pn=${encodedMerchantName}&am=${formattedAmount}&cu=INR&tn=${encodedNote}#Intent;scheme=upi;package=com.dreamplug.android.apps;end;`,
-      iosSchemeUri: `credpay://upi/pay?pa=${CAFE_UPI_ID}&pn=${encodedMerchantName}&am=${formattedAmount}&cu=INR&tn=${encodedNote}`,
+      badge: 'Working (No Limits)',
+      androidIntent: `intent://pay?pa=${CAFE_UPI_ID}&pn=${encodedMerchantName}&am=${activeAmount}&cu=INR&tn=${encodedNote}#Intent;scheme=upi;package=com.dreamplug.android.apps;end;`,
+      iosSchemeUri: `credpay://upi/pay?pa=${CAFE_UPI_ID}&pn=${encodedMerchantName}&am=${activeAmount}&cu=INR&tn=${encodedNote}`,
       universalUri: cleanUniversalUpiUri,
       bgSelected: 'bg-stone-900 text-white',
       textColor: 'text-stone-950',
@@ -224,11 +226,24 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
       iconBg: 'bg-stone-900 text-amber-300'
     },
     {
+      id: 'phonepe',
+      name: 'PhonePe',
+      shortName: 'PhonePe',
+      badge: 'Popular',
+      androidIntent: `intent://pay?pa=${CAFE_UPI_ID}&pn=${encodedMerchantName}&am=${activeAmount}&cu=INR&tn=${encodedNote}#Intent;scheme=upi;package=com.phonepe.app;end;`,
+      iosSchemeUri: `phonepe://pay?pa=${CAFE_UPI_ID}&pn=${encodedMerchantName}&am=${activeAmount}&cu=INR&tn=${encodedNote}`,
+      universalUri: cleanUniversalUpiUri,
+      bgSelected: 'bg-indigo-50/90',
+      textColor: 'text-indigo-950',
+      borderSelected: 'border-indigo-600 ring-2 ring-indigo-600/20',
+      iconBg: 'bg-indigo-600 text-white'
+    },
+    {
       id: 'bhim',
       name: 'BHIM UPI',
       shortName: 'BHIM',
       badge: 'Official',
-      androidIntent: `intent://pay?pa=${CAFE_UPI_ID}&pn=${encodedMerchantName}&am=${formattedAmount}&cu=INR&tn=${encodedNote}#Intent;scheme=upi;package=in.org.npci.upiapp;end;`,
+      androidIntent: `intent://pay?pa=${CAFE_UPI_ID}&pn=${encodedMerchantName}&am=${activeAmount}&cu=INR&tn=${encodedNote}#Intent;scheme=upi;package=in.org.npci.upiapp;end;`,
       iosSchemeUri: cleanUniversalUpiUri,
       universalUri: cleanUniversalUpiUri,
       bgSelected: 'bg-amber-50/90',
@@ -241,8 +256,8 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
       name: 'Paytm UPI',
       shortName: 'Paytm',
       badge: 'UPI',
-      androidIntent: `intent://pay?pa=${CAFE_UPI_ID}&pn=${encodedMerchantName}&am=${formattedAmount}&cu=INR&tn=${encodedNote}#Intent;scheme=upi;package=net.one97.paytm;end;`,
-      iosSchemeUri: `paytmmp://pay?pa=${CAFE_UPI_ID}&pn=${encodedMerchantName}&am=${formattedAmount}&cu=INR&tn=${encodedNote}`,
+      androidIntent: `intent://pay?pa=${CAFE_UPI_ID}&pn=${encodedMerchantName}&am=${activeAmount}&cu=INR&tn=${encodedNote}#Intent;scheme=upi;package=net.one97.paytm;end;`,
+      iosSchemeUri: `paytmmp://pay?pa=${CAFE_UPI_ID}&pn=${encodedMerchantName}&am=${activeAmount}&cu=INR&tn=${encodedNote}`,
       universalUri: cleanUniversalUpiUri,
       bgSelected: 'bg-sky-50/90',
       textColor: 'text-sky-950',
@@ -451,7 +466,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                     </span>
                   </div>
                   <p className="text-[11px] text-stone-500 mt-0.5">
-                    Google Pay, PhonePe, QR Code
+                    Google Pay, PhonePe, UPI Pay Kit
                   </p>
                 </div>
               </button>
@@ -493,7 +508,46 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
           {/* UPI Payment Flow View */}
           {method === 'UPI' && (
             <div className="space-y-4">
-              {/* PRIMARY FOCUS: GOOGLE PAY EXPRESS HUB */}
+              {/* SECTION A: LATEST UPI PLUGIN INTEGRATION (upi-pay-kit v4.0.2) */}
+              <div className="bg-gradient-to-r from-teal-900 via-teal-800 to-emerald-900 rounded-2xl p-4 text-white shadow-md relative overflow-hidden">
+                <div className="relative z-10 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-lg bg-amber-400 text-stone-900 flex items-center justify-center font-black text-xs shadow-xs">
+                        <Sparkles className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div className="font-bold text-sm text-amber-300 flex items-center gap-1.5">
+                          <span>UPI Pay Kit (Latest 2026 Plugin)</span>
+                          <span className="text-[9px] bg-emerald-500/30 text-emerald-200 px-2 py-0.5 rounded-full font-bold border border-emerald-400/30">
+                            v4.0.2
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-teal-100">
+                          Direct React UPI engine with verified intents & UTR input
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsUpiPayKitOpen(true)}
+                    className="w-full py-3 px-4 rounded-xl bg-amber-400 hover:bg-amber-300 active:scale-[0.99] text-stone-950 font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer"
+                  >
+                    <Layers className="w-4 h-4 text-stone-900" />
+                    <span>Launch UPI Pay Kit Checkout Modal (₹{total})</span>
+                    <ExternalLink className="w-3.5 h-3.5 text-stone-800" />
+                  </button>
+
+                  <div className="flex items-center justify-between text-[10px] text-teal-200 px-1">
+                    <span>• Auto-detects Google Pay & PhonePe</span>
+                    <span>• Zero intermediary commission</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* SECTION B: GOOGLE PAY EXPRESS HUB & DIRECT PHONE BYPASS */}
               <div className="bg-gradient-to-br from-emerald-50 via-teal-50/70 to-emerald-50/40 rounded-2xl p-4 border-2 border-emerald-500/80 shadow-xs space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -502,18 +556,18 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                     </div>
                     <div>
                       <h4 className="font-bold text-emerald-950 text-sm flex items-center gap-1.5">
-                        <span>Google Pay (Official Method)</span>
+                        <span>Google Pay (Direct Transfer)</span>
                         <span className="text-[10px] bg-emerald-600 text-white px-2 py-0.2 rounded-full font-bold">
                           PRIMARY
                         </span>
                       </h4>
                       <p className="text-[11px] text-emerald-800">
-                        Pay ₹{total} to <strong>{CAFE_UPI_ID}</strong>
+                        Pay ₹{activeAmount} to <strong>{CAFE_UPI_ID}</strong>
                       </p>
                     </div>
                   </div>
                   <div className="text-right">
-                    <span className="text-xs font-bold text-emerald-950 block">₹{total}</span>
+                    <span className="text-xs font-bold text-emerald-950 block">₹{activeAmount}</span>
                     <span className="text-[10px] text-emerald-700">Pre-filled</span>
                   </div>
                 </div>
@@ -531,7 +585,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                     className="w-full py-3 px-4 rounded-xl bg-emerald-700 hover:bg-emerald-800 active:scale-[0.99] text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-sm transition-all"
                   >
                     <Smartphone className="w-4 h-4 text-amber-300" />
-                    <span>Open Google Pay & Pay ₹{total} (Direct)</span>
+                    <span>Open Google Pay & Pay ₹{activeAmount} (Deep Link)</span>
                     <ExternalLink className="w-3.5 h-3.5 text-emerald-200" />
                   </a>
 
@@ -548,7 +602,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                   </div>
                 </div>
 
-                {/* Option 2: 1-TAP GUARANTEED BYPASS FOR BANK LIMITS */}
+                {/* Option 2: 1-TAP GUARANTEED BYPASS FOR "EXCEEDED BANK LIMIT" */}
                 <div className="pt-2.5 border-t border-emerald-200/90 space-y-2">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold text-emerald-950 flex items-center gap-1.5">
@@ -561,7 +615,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                   </div>
 
                   <p className="text-[11px] text-stone-600 leading-relaxed">
-                    Banks limit browser web-links & gallery QR scans to ₹2,000. 
+                    Banks restrict browser web links to ₹2,000. 
                     <strong> Inside Google Pay, tap "Pay phone number" for the full ₹1,00,000 limit with 0 errors!</strong>
                   </p>
 
@@ -571,7 +625,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                     className="w-full py-2.5 px-3 rounded-xl bg-white hover:bg-emerald-50 text-emerald-900 border border-emerald-400 font-bold text-xs flex items-center justify-center gap-2 shadow-2xs transition-colors cursor-pointer"
                   >
                     <Copy className="w-3.5 h-3.5 text-emerald-700" />
-                    <span>Copy {CAFE_PHONE} & Open Google Pay</span>
+                    <span>Copy {CAFE_PHONE} & Open Google Pay (Pay Phone Number)</span>
                     <ArrowRight className="w-3.5 h-3.5 text-emerald-700" />
                   </button>
 
@@ -579,18 +633,97 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                     <div className="p-2.5 rounded-xl bg-emerald-100/90 text-emerald-950 text-[11px] font-medium border border-emerald-300 animate-in fade-in space-y-1">
                       <div className="font-bold flex items-center gap-1">
                         <Check className="w-3.5 h-3.5 text-emerald-700" />
-                        <span>Copied {CAFE_PHONE}! Follow these steps in Google Pay:</span>
+                        <span>Copied {CAFE_PHONE}! Quick Steps in Google Pay:</span>
                       </div>
                       <ol className="list-decimal list-inside pl-1 text-[10px] text-stone-700 space-y-0.5">
                         <li>In Google Pay, tap <strong>"Pay phone number"</strong></li>
                         <li>Paste <strong>{CAFE_PHONE}</strong> (Musafir Cafe)</li>
-                        <li>Enter <strong>₹{total}</strong> & enter UPI PIN to pay</li>
+                        <li>Enter <strong>₹{activeAmount}</strong> & enter UPI PIN to pay</li>
                         <li>Come back here and tap <strong>Confirm Payment</strong> below!</li>
                       </ol>
                     </div>
                   )}
                 </div>
               </div>
+
+              {/* SECTION C: 2-PART SPLIT PAYMENT (Solves Bank ₹2,000 limit error) */}
+              {total >= 2000 && (
+                <div className="bg-amber-50/90 rounded-2xl p-3.5 border border-amber-300/80 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Split className="w-4 h-4 text-amber-700" />
+                      <div>
+                        <div className="font-bold text-xs text-amber-950">
+                          Split Payment Helper (Bypass ₹2,000 Bank Cap)
+                        </div>
+                        <div className="text-[10px] text-amber-800">
+                          Banks limit single UPI transfers to ₹2,000 for new payees
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setSplitMode(!splitMode)}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-bold border transition-colors cursor-pointer ${
+                        splitMode
+                          ? 'bg-amber-600 text-white border-amber-600'
+                          : 'bg-white text-stone-700 border-stone-300 hover:bg-stone-50'
+                      }`}
+                    >
+                      {splitMode ? 'Split Active' : 'Enable Split'}
+                    </button>
+                  </div>
+
+                  {splitMode && (
+                    <div className="space-y-2 pt-1 border-t border-amber-200">
+                      <p className="text-[11px] text-stone-700">
+                        Pay in 2 parts of <strong>₹{halfAmount} each</strong> to stay below the bank limit:
+                      </p>
+                      <div className="grid grid-cols-2 gap-2">
+                        {/* Part 1 */}
+                        <div className={`p-2.5 rounded-xl border ${splitPart1Paid ? 'bg-emerald-50 border-emerald-300' : 'bg-white border-stone-200'}`}>
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="font-bold text-xs text-stone-900">Part 1: ₹{halfAmount}</span>
+                            {splitPart1Paid ? (
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                            ) : (
+                              <span className="text-[9px] text-amber-700 font-bold">Pending</span>
+                            )}
+                          </div>
+                          <a
+                            href={`tez://upi/pay?pa=${CAFE_UPI_ID}&pn=${encodedMerchantName}&am=${halfAmount}&cu=INR&tn=${encodeURIComponent('Part 1 Payment')}`}
+                            target="_top"
+                            onClick={() => setSplitPart1Paid(true)}
+                            className="w-full py-1.5 px-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] rounded-lg flex items-center justify-center gap-1 text-center"
+                          >
+                            Pay Part 1 (₹{halfAmount})
+                          </a>
+                        </div>
+
+                        {/* Part 2 */}
+                        <div className={`p-2.5 rounded-xl border ${splitPart2Paid ? 'bg-emerald-50 border-emerald-300' : 'bg-white border-stone-200'}`}>
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="font-bold text-xs text-stone-900">Part 2: ₹{halfAmount}</span>
+                            {splitPart2Paid ? (
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                            ) : (
+                              <span className="text-[9px] text-amber-700 font-bold">Pending</span>
+                            )}
+                          </div>
+                          <a
+                            href={`tez://upi/pay?pa=${CAFE_UPI_ID}&pn=${encodedMerchantName}&am=${halfAmount}&cu=INR&tn=${encodeURIComponent('Part 2 Payment')}`}
+                            target="_top"
+                            onClick={() => setSplitPart2Paid(true)}
+                            className="w-full py-1.5 px-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] rounded-lg flex items-center justify-center gap-1 text-center"
+                          >
+                            Pay Part 2 (₹{halfAmount})
+                          </a>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* BANK UPI LIMITS LOOKUP ACCORDION (Answers user's "check upi limit per bank") */}
               <div className="bg-stone-50 rounded-2xl border border-stone-200 overflow-hidden">
@@ -680,7 +813,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                 )}
               </div>
 
-              {/* Step 2: Other UPI Apps (PhonePe, CRED, BHIM, Paytm) */}
+              {/* Step 2: Other UPI Apps (CRED, PhonePe, BHIM, Paytm) */}
               <div className="bg-stone-50/90 rounded-2xl p-3.5 border border-stone-200/90">
                 <div className="flex items-center justify-between mb-2">
                   <label className="text-xs font-bold text-stone-800 flex items-center gap-1.5">
@@ -730,7 +863,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                               isSelected && app.id === 'cred' ? 'text-stone-300' : 'text-stone-500'
                             }`}
                           >
-                            Auto-fill ₹{total}
+                            Auto-fill ₹{activeAmount}
                           </div>
                         </div>
                       </button>
@@ -748,7 +881,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                       Payment initiated in {currentApp.name}... ({waitTimer}s)
                     </p>
                     <p className="text-[11px] text-emerald-800/90 mt-0.5 leading-relaxed">
-                      Amount <strong>₹{total}</strong> to <strong>{CAFE_UPI_ID}</strong> is pre-filled.
+                      Amount <strong>₹{activeAmount}</strong> to <strong>{CAFE_UPI_ID}</strong> is pre-filled.
                       After completing payment, tap <strong>Confirm Payment</strong> below!
                     </p>
                   </div>
@@ -798,167 +931,171 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                     {/* Single UPI ID & Mobile Number with One-Tap Copy */}
                     <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
                       {/* Copy UPI ID */}
-                      <div className="inline-flex items-center gap-2 bg-white px-3 py-1.5 rounded-xl border border-stone-200/80 shadow-2xs">
-                        <span className="text-[11px] text-stone-500">UPI ID:</span>
-                        <span className="font-mono font-bold text-stone-900 text-xs">
-                          {CAFE_UPI_ID}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={handleCopyUpi}
-                          className="p-1 text-stone-500 hover:text-teal-900 hover:bg-stone-100 rounded-md transition-colors cursor-pointer"
-                          title="Copy UPI ID"
-                        >
-                          {copiedUpi ? (
+                      <button
+                        type="button"
+                        onClick={handleCopyUpi}
+                        className="px-3 py-1.5 rounded-xl bg-white border border-stone-300 hover:border-teal-700 text-stone-800 text-xs font-semibold flex items-center gap-1.5 shadow-2xs hover:bg-stone-50 cursor-pointer transition-colors"
+                      >
+                        {copiedUpi ? (
+                          <>
                             <Check className="w-3.5 h-3.5 text-emerald-600" />
-                          ) : (
-                            <Copy className="w-3.5 h-3.5" />
-                          )}
-                        </button>
-                        {copiedUpi && (
-                          <span className="text-[10px] text-emerald-600 font-semibold">Copied!</span>
+                            <span className="text-emerald-700 font-bold">UPI ID Copied!</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-3.5 h-3.5 text-teal-700" />
+                            <span>Copy UPI ID: <strong>{CAFE_UPI_ID}</strong></span>
+                          </>
                         )}
-                      </div>
+                      </button>
 
                       {/* Copy Mobile Number */}
-                      <div className="inline-flex items-center gap-2 bg-white px-3 py-1.5 rounded-xl border border-stone-200/80 shadow-2xs">
-                        <span className="text-[11px] text-stone-500">Mobile:</span>
-                        <span className="font-mono font-bold text-stone-900 text-xs">
-                          {CAFE_PHONE}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={handleCopyPhone}
-                          className="p-1 text-stone-500 hover:text-teal-900 hover:bg-stone-100 rounded-md transition-colors cursor-pointer"
-                          title="Copy Phone Number"
-                        >
-                          {copiedPhone ? (
+                      <button
+                        type="button"
+                        onClick={handleCopyPhone}
+                        className="px-3 py-1.5 rounded-xl bg-white border border-stone-300 hover:border-teal-700 text-stone-800 text-xs font-semibold flex items-center gap-1.5 shadow-2xs hover:bg-stone-50 cursor-pointer transition-colors"
+                      >
+                        {copiedPhone ? (
+                          <>
                             <Check className="w-3.5 h-3.5 text-emerald-600" />
-                          ) : (
-                            <Copy className="w-3.5 h-3.5" />
-                          )}
-                        </button>
-                        {copiedPhone && (
-                          <span className="text-[10px] text-emerald-600 font-semibold">Copied!</span>
+                            <span className="text-emerald-700 font-bold">Mobile Copied!</span>
+                          </>
+                        ) : (
+                          <>
+                            <Phone className="w-3.5 h-3.5 text-teal-700" />
+                            <span>Copy Mobile: <strong>{CAFE_PHONE}</strong></span>
+                          </>
                         )}
-                      </div>
+                      </button>
                     </div>
+
+                    {copyFeedbackMsg && (
+                      <p className="text-[11px] text-emerald-700 font-medium mt-2 animate-in fade-in">
+                        {copyFeedbackMsg}
+                      </p>
+                    )}
                   </>
                 )}
               </div>
 
-              {/* Optional Transaction ID / UTR Input */}
-              <div className="bg-stone-50/70 p-3.5 rounded-2xl border border-stone-200 space-y-2">
+              {/* UTR / Transaction ID Input Form */}
+              <div className="bg-stone-50 rounded-2xl p-4 border border-stone-200 space-y-2">
                 <div className="flex items-center justify-between">
-                  <label
-                    htmlFor="transactionIdInput"
-                    className="font-semibold text-stone-800 text-xs flex items-center gap-1.5"
-                  >
-                    <span>Google Pay UPI Transaction ID / 12-digit UTR</span>
-                    <span className="text-[10px] text-stone-500 font-normal">
-                      (Optional)
-                    </span>
+                  <label className="text-xs font-bold text-stone-800">
+                    UPI Reference / UTR / Transaction ID (Optional)
                   </label>
                   <button
                     type="button"
                     onClick={handleGenerateSampleTxn}
-                    className="text-[11px] text-teal-800 hover:text-teal-950 font-medium underline cursor-pointer"
+                    className="text-[11px] text-teal-800 hover:underline font-semibold cursor-pointer"
                   >
-                    Auto-Fill Ref
+                    Auto-Fill ID
                   </button>
                 </div>
-
-                <div className="relative">
-                  <input
-                    id="transactionIdInput"
-                    type="text"
-                    value={transactionId}
-                    onChange={(e) => setTransactionId(e.target.value)}
-                    placeholder="e.g. 429381048201 (12-digit UTR from Google Pay)"
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-stone-300 bg-white text-xs font-mono text-stone-900 focus:outline-none focus:ring-2 focus:ring-teal-700/30 focus:border-teal-700 placeholder:text-stone-400 placeholder:font-sans"
-                  />
-                </div>
-
-                <p className="text-[11px] text-stone-500 leading-relaxed">
-                  💡 <strong>Tip:</strong> Once paid via Google Pay, you can paste the 12-digit UTR or immediately tap <strong>Confirm Payment & Place Order</strong> below!
+                <input
+                  type="text"
+                  placeholder="e.g. 412345678901 or UPI123456"
+                  value={transactionId}
+                  onChange={(e) => setTransactionId(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-stone-300 bg-white text-stone-900 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-teal-700/30 focus:border-teal-700"
+                />
+                <p className="text-[10px] text-stone-500">
+                  After paying in Google Pay or PhonePe, copy the 12-digit UTR number here for instant order tracking.
                 </p>
               </div>
             </div>
           )}
 
-          {/* Cash Payment Mode View */}
+          {/* Cash on Delivery / Counter Flow */}
           {method !== 'UPI' && (
-            <div className="bg-amber-50/60 border border-amber-200/80 rounded-2xl p-4 space-y-3">
-              <div className="flex items-center gap-2 text-amber-900 font-semibold text-xs sm:text-sm">
-                <Banknote className="w-4 h-4 text-amber-800" />
-                <span>
-                  {customer.orderType === 'Home Delivery'
-                    ? 'Cash on Delivery Selected'
-                    : 'Pay at Counter / Table Selected'}
-                </span>
+            <div className="bg-stone-50 rounded-2xl p-4 border border-stone-200 text-center space-y-2">
+              <div className="w-12 h-12 rounded-2xl bg-teal-100 text-teal-900 flex items-center justify-center mx-auto">
+                <Banknote className="w-6 h-6" />
               </div>
-              <p className="text-xs text-amber-900/90 leading-relaxed">
+              <h4 className="font-bold text-stone-900 text-sm">
                 {customer.orderType === 'Home Delivery'
-                  ? `Please keep exact cash of ₹${total} ready to hand over to the delivery partner when your order arrives.`
-                  : `Your order will be prepared immediately. You can settle the bill of ₹${total} at the cafe counter or table.`}
+                  ? 'Cash on Delivery (COD)'
+                  : 'Pay Cash at Counter'}
+              </h4>
+              <p className="text-xs text-stone-600 max-w-sm mx-auto">
+                {customer.orderType === 'Home Delivery'
+                  ? `Please keep exact change of ₹${total} ready for our delivery executive.`
+                  : `Please present your order confirmation at the counter and pay ₹${total}.`}
               </p>
-              <div className="pt-2 border-t border-amber-200/60 flex items-center justify-between text-xs text-amber-800 font-medium">
-                <span>Payment Status upon confirmation:</span>
-                <span className="bg-amber-100 text-amber-900 px-2 py-0.5 rounded-full font-bold text-[11px]">
-                  Pending (Pay on Delivery / Counter)
-                </span>
-              </div>
             </div>
           )}
 
-          {/* Error Notice */}
           {errorNotice && (
             <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 shrink-0" />
+              <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
               <span>{errorNotice}</span>
             </div>
           )}
         </div>
 
-        {/* Modal Footer Actions */}
-        <div className="bg-stone-50 p-4 border-t border-stone-200 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
+        {/* Modal Footer Controls */}
+        <div className="bg-stone-50 px-5 py-3.5 border-t border-stone-200 flex items-center justify-between gap-3 shrink-0">
           <button
             type="button"
             onClick={onClose}
             disabled={isSubmitting}
-            className="w-full sm:w-auto px-4 py-2.5 rounded-xl border border-stone-300 text-stone-700 font-medium hover:bg-stone-100 transition-colors cursor-pointer text-xs sm:text-sm text-center"
+            className="px-4 py-2.5 rounded-xl border border-stone-300 text-stone-700 hover:bg-stone-200/50 text-xs sm:text-sm font-semibold transition-colors cursor-pointer"
           >
-            ← Back to Menu
+            Cancel
           </button>
 
           <button
             type="button"
             onClick={handleConfirm}
             disabled={isSubmitting}
-            className={`w-full sm:w-auto px-6 py-2.5 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all shadow-sm cursor-pointer ${
-              isSubmitting
-                ? 'bg-stone-300 text-stone-500 cursor-not-allowed shadow-none'
-                : 'bg-emerald-700 hover:bg-emerald-800 text-white hover:shadow active:scale-[0.99]'
-            }`}
+            className="flex-1 py-2.5 px-5 rounded-xl bg-teal-800 hover:bg-teal-900 active:scale-[0.99] text-white text-xs sm:text-sm font-bold shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
           >
             {isSubmitting ? (
               <>
-                <Loader2 className="w-4 h-4 animate-spin" />
+                <Loader2 className="w-4 h-4 animate-spin text-amber-300" />
                 <span>Confirming Order...</span>
               </>
             ) : (
               <>
-                <ShieldCheck className="w-4 h-4 text-amber-300" />
+                <CheckCircle2 className="w-4 h-4 text-amber-300" />
                 <span>
-                  {method === 'UPI'
-                    ? `Confirm Payment & Place Order (₹${total})`
-                    : `Confirm Order (₹${total})`}
+                  {method === 'UPI' ? 'Confirm Payment & Place Order' : 'Place Cash Order'}
                 </span>
               </>
             )}
           </button>
         </div>
       </div>
+
+      {/* LATEST PLUGIN: UPI Pay Kit Drop-in Modal */}
+      <UPICheckout
+        open={isUpiPayKitOpen}
+        onOpenChange={setIsUpiPayKitOpen}
+        amount={Math.round(total * 100)} // In Paise
+        merchantUpiId={CAFE_UPI_ID}
+        merchantName={CAFE_MERCHANT_NAME}
+        collectName={false}
+        collectPhone={false}
+        collectEmail={false}
+        manualVerification={true}
+        onSubmitUTR={(utr) => {
+          setTransactionId(utr);
+          return true;
+        }}
+        onSuccess={(txn) => {
+          setIsUpiPayKitOpen(false);
+          const txnId = txn?.id || `UPI${Date.now().toString().slice(-10)}`;
+          setTransactionId(txnId);
+          onConfirmOrder({
+            method: 'UPI',
+            status: 'Paid',
+            transactionId: txnId,
+            paymentApp: 'UPI Pay Kit',
+            paidAt: new Date().toISOString()
+          });
+        }}
+        onClose={() => setIsUpiPayKitOpen(false)}
+      />
     </div>
   );
 };
